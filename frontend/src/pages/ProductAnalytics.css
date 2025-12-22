@@ -1366,25 +1366,29 @@
 }
 
 /* ============================================
-   ERROR TIMELINE VIEW
-   Full station names with sticky labels
+   ERROR TIMELINE VIEW - Canvas-based Zoomable
    ============================================ */
 
 .error-timeline-v2 {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  height: 100%;
+  min-height: 600px;
 }
 
-.timeline-header {
+.error-timeline-v2 .timeline-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.timeline-header h2 {
+.error-timeline-v2 .timeline-header h2 {
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 700;
@@ -1402,7 +1406,7 @@
 
 .header-filters {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 1.5rem;
   flex-wrap: wrap;
 }
@@ -1410,13 +1414,14 @@
 .filter-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 .filter-group label {
   font-size: 0.6875rem;
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .filter-pills {
@@ -1450,170 +1455,359 @@
   color: var(--accent-primary);
 }
 
-/* Timeline Main */
-.timeline-main {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
+.pill-count {
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  background: var(--bg-subtle);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
 }
 
-/* STICKY Time Axis */
-.time-axis {
+.code-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.code-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* Zoom Controls */
+.zoom-controls {
   display: flex;
   align-items: center;
-  background: var(--bg-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0.75rem 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  gap: 0.5rem;
 }
 
-/* Station column header - shows "Station" label */
-.axis-label-space {
-  width: 220px;
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.zoom-value {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+}
+
+.reset-btn {
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* Timeline Canvas Wrapper */
+.timeline-canvas-wrapper {
+  flex: 1;
+  display: flex;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-height: 400px;
+}
+
+/* Swimlane Labels Container */
+.swimlane-labels-container {
+  width: 200px;
   flex-shrink: 0;
-  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.labels-header {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.axis-track {
+.labels-scroll {
   flex: 1;
-  position: relative;
-  height: 24px;
+  overflow: hidden;
 }
 
-.axis-tick {
-  position: absolute;
+.swimlane-label {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  transform: translateX(-50%);
-}
-
-.tick-line {
-  width: 1px;
-  height: 8px;
-  background: var(--border-default);
-}
-
-.tick-label {
-  font-size: 0.625rem;
-  font-family: var(--font-mono);
-  color: var(--text-dim);
-  margin-top: 0.25rem;
-}
-
-/* Swimlanes */
-.swimlanes {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.swimlane {
-  display: flex;
+  gap: 0.625rem;
+  padding: 0 0.75rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.swimlane:last-child { border-bottom: none; }
-
-/* STICKY Lane Label - Full Station Names */
-.lane-label {
-  width: 220px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-subtle);
-  position: sticky;
-  left: 0;
-  z-index: 5;
+.swimlane-label.even {
+  background: var(--bg-card);
 }
 
-.lane-station {
-  width: 32px;
-  height: 32px;
+.swimlane-label.odd {
+  background: var(--bg-secondary);
+}
+
+.label-station-icon {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   flex-shrink: 0;
-  background: var(--station-color, var(--accent-primary));
   color: white;
 }
 
-.lane-info {
+.swimlane-label .label-info {
   flex: 1;
   min-width: 0;
 }
 
-/* Full station name - NOT acronym */
-.lane-name {
-  font-family: var(--font-display);
-  font-size: 0.875rem;
+.swimlane-label .label-code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
+  display: block;
+}
+
+.swimlane-label .label-message {
+  font-size: 0.625rem;
+  color: var(--text-dim);
   display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Small code underneath the full name */
-.lane-code {
-  font-family: var(--font-mono);
+.swimlane-label .label-count {
   font-size: 0.625rem;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--accent-danger);
+  background: var(--accent-danger-dim);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+/* Canvas Container */
+.error-timeline-v2 .canvas-container {
+  flex: 1;
+  position: relative;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.error-timeline-v2 .canvas-container:active {
+  cursor: grabbing;
+}
+
+.error-timeline-v2 .canvas-container canvas {
   display: block;
 }
 
-.lane-count {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-card);
-  padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-full);
-}
-
-.lane-track {
-  flex: 1;
-  position: relative;
-  min-height: 48px;
-}
-
-.track-bg {
+.canvas-empty {
   position: absolute;
   inset: 0;
-  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  color: var(--text-muted);
 }
 
-.error-dot {
+.canvas-empty .empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+/* Error Tooltip */
+.error-timeline-v2 .error-tooltip {
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 260px;
+  padding: 0.875rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  pointer-events: none;
+}
+
+.error-tooltip .tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.error-tooltip .tooltip-station {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.error-tooltip .tooltip-code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--bg-subtle);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.error-tooltip .tooltip-time {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.375rem;
+}
+
+.error-tooltip .tooltip-duration {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.375rem;
+}
+
+.error-tooltip .tooltip-duration strong {
+  color: var(--accent-danger);
+}
+
+.error-tooltip .tooltip-message {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Station Summary */
+.station-summary {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 0 8px currentColor;
+  min-width: 160px;
 }
 
-.error-dot:hover {
-  transform: translate(-50%, -50%) scale(1.5);
-  z-index: 10;
+.summary-item:hover {
+  border-color: var(--item-color);
+  transform: translateY(-1px);
+}
+
+.summary-item.selected {
+  border-color: var(--item-color);
+  background: color-mix(in srgb, var(--item-color) 8%, white);
+}
+
+.summary-item .item-icon {
+  font-size: 1.25rem;
+}
+
+.summary-item .item-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.summary-item .item-count {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent-danger);
+}
+
+.summary-item .item-bar {
+  width: 40px;
+  height: 4px;
+  background: var(--bg-subtle);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.summary-item .item-fill {
+  height: 100%;
+  background: var(--item-color);
+  border-radius: 2px;
+}
+
+/* Timeline Hint */
+.timeline-hint {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 0.75rem;
+  background: var(--bg-subtle);
+  font-size: 0.6875rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.timeline-hint span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
 }
 
 /* ============================================
@@ -1671,100 +1865,6 @@
 /* Full station name in legend */
 .legend-name {
   font-weight: 500;
-}
-
-/* Station Summary - Full Names */
-.station-summary {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.summary-item {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.75rem 1rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 200px;
-  box-shadow: var(--shadow-sm);
-}
-
-.summary-item:hover {
-  border-color: var(--item-color);
-  box-shadow: var(--shadow-md);
-}
-
-.summary-item.selected {
-  background: var(--accent-primary-dim);
-  border-color: var(--accent-primary);
-}
-
-.item-icon { font-size: 1.25rem; }
-
-/* Full station name in summary */
-.item-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  flex: 1;
-}
-
-.item-count {
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--item-color);
-}
-
-/* Error Tooltip - Full station name */
-.error-tooltip {
-  position: absolute;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: 1rem;
-  min-width: 280px;
-  z-index: 1000;
-  box-shadow: var(--shadow-lg);
-  pointer-events: none;
-}
-
-.tooltip-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-/* Full station name in tooltip */
-.tooltip-station {
-  font-weight: 600;
-  font-size: 0.9375rem;
-}
-
-.tooltip-code {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--bg-subtle);
-  border-radius: var(--radius-sm);
-}
-
-.tooltip-time {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-bottom: 0.375rem;
-}
-
-.tooltip-message {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
 }
 
 /* ============================================
