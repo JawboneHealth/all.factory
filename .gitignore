@@ -41,6 +41,13 @@ coverage/
 # Vite
 .vite/
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.so
+
 # Misc
 .eslintcache
 *.pem
