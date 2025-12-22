@@ -3,7 +3,8 @@ Cleanup Router - Handles file uploads, analysis, and change management.
 
 Endpoints:
 - POST /cleanup/upload/mmi - Upload MMI log file
-- POST /cleanup/upload/sql - Upload SQL export (Excel)
+- POST /cleanup/upload/sql - Upload SQL export (Excel) - main data table
+- POST /cleanup/upload/sql-errors - Upload SQL error table (Excel) - for OEE analysis
 - POST /cleanup/analyze - Run analysis and generate change proposals
 - GET /cleanup/changes - Get all proposed changes
 - GET /cleanup/changes/{id} - Get single change with full details
@@ -13,6 +14,14 @@ Endpoints:
 - GET /cleanup/export/sql - Download cleaned SQL data as Excel
 - GET /cleanup/export/mmi - Download cleaned MMI log
 - GET /cleanup/stats - Get summary statistics
+
+Issue Types Detected:
+- DUPLICATE_INSERT: Overlapped events (Battery #2)
+- MISSING_PSA_TAPE: Missing PSA tape picture path (Battery #1)
+- ORPHAN_ROW: Missing SN & PRS with PSA images (Battery #3)
+- INDEX_MISMATCH: Mismatched PSA image indices (Battery #4)
+- ERROR_EVENT_MISMATCH: SQL/MMI error event discrepancy (Battery #5)
+- REPEATED_INSERT: Same content logged multiple times (PCBA #1)
 """
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -37,6 +46,10 @@ store = {
     "sql_data": [],          # Parsed SQL rows
     "sql_df": None,          # Pandas DataFrame
     "sql_filename": "",
+    "sql_error_raw": None,   # Original SQL error table bytes
+    "sql_error_data": [],    # Parsed SQL error rows (for OEE analysis)
+    "sql_error_df": None,    # Pandas DataFrame for error table
+    "sql_error_filename": "",
     "changes": [],           # Proposed changes with status
 }
 
@@ -84,6 +97,24 @@ async def upload_sql(file: UploadFile = File(...)):
     }
 
 
+@router.post("/upload/sql-errors")
+async def upload_sql_errors(file: UploadFile = File(...)):
+    """Upload and parse SQL error table Excel file (for OEE analysis)"""
+    content = await file.read()
+    
+    store["sql_error_raw"] = content
+    store["sql_error_data"] = parse_sql_export(content)
+    store["sql_error_df"] = parse_sql_export_df(content)
+    store["sql_error_filename"] = file.filename
+    store["changes"] = []  # Reset changes
+    
+    return {
+        "filename": file.filename,
+        "total_rows": len(store["sql_error_data"]),
+        "columns": list(store["sql_error_df"].columns) if store["sql_error_df"] is not None else []
+    }
+
+
 @router.post("/analyze")
 def analyze():
     """Run analysis and generate change proposals"""
@@ -92,8 +123,12 @@ def analyze():
     if not store["sql_data"]:
         raise HTTPException(status_code=400, detail="No SQL data uploaded")
     
-    # Run analysis
-    store["changes"] = find_all_issues(store["mmi_events"], store["sql_data"])
+    # Run analysis (pass error data if available)
+    store["changes"] = find_all_issues(
+        store["mmi_events"], 
+        store["sql_data"],
+        store["sql_error_data"] if store["sql_error_data"] else None
+    )
     
     # Count by type and status
     by_type = {}
@@ -267,15 +302,26 @@ def export_mmi():
     # For MMI, we remove duplicate INSERT lines
     lines = store["mmi_raw"].split("\n")
     
-    # Get line numbers to remove (from approved DELETE changes on duplicates)
+    # Get line numbers to remove (from approved DELETE changes)
     lines_to_remove = set()
     for change in store["changes"]:
-        if change["status"] == "approved" and change["issue_type"] == "DUPLICATE_INSERT":
-            # Remove the second occurrence (higher line numbers)
+        if change["status"] != "approved":
+            continue
+            
+        # Handle DUPLICATE_INSERT - remove duplicate lines
+        if change["issue_type"] == "DUPLICATE_INSERT":
             line_nums = change.get("mmi_line_numbers", [])
             if len(line_nums) >= 2:
                 # Keep first, remove rest
                 for ln in line_nums[1:]:
+                    lines_to_remove.add(ln)
+        
+        # Handle REPEATED_INSERT - remove repeated lines (keep first occurrence)
+        elif change["issue_type"] == "REPEATED_INSERT":
+            line_nums = change.get("mmi_line_numbers", [])
+            first_line = change.get("first_line_number")
+            for ln in line_nums:
+                if ln != first_line:
                     lines_to_remove.add(ln)
     
     # Filter lines

@@ -1312,3 +1312,90 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-light);
 }
+/* New issue type styles */
+.mismatch-info,
+.repeat-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.mismatch-badge,
+.repeat-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.mismatch-badge.sql-only {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.mismatch-badge.mmi-only {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+.mismatch-badge.duplicate-in-sql {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.mismatch-badge.missing-clear-time {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.repeat-badge {
+  background: rgba(20, 184, 166, 0.15);
+  color: #0d9488;
+}
+
+.first-line {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+.suggested-value {
+  color: var(--text-secondary);
+}
+
+.suggested-value code {
+  font-family: var(--font-mono);
+  background: var(--bg-code);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+}
+
+.flag-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #d97706;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+/* OEE Error color accent */
+.issue-type-badge[style*="ec4899"],
+.evidence-badge[style*="ec4899"] {
+  background: #ec4899 !important;
+}
+
+/* Repeated Insert color accent */
+.issue-type-badge[style*="14b8a6"],
+.evidence-badge[style*="14b8a6"] {
+  background: #14b8a6 !important;
+}

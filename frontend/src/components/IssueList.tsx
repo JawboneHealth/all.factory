@@ -8,9 +8,11 @@ interface Props {
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   DUPLICATE_INSERT: { label: 'Duplicate', color: '#ef4444' },
-  MISSING_PSA_TAPE: { label: 'Missing', color: '#f59e0b' },
+  MISSING_PSA_TAPE: { label: 'Missing PSA', color: '#f59e0b' },
   ORPHAN_ROW: { label: 'Orphan', color: '#8b5cf6' },
-  INDEX_MISMATCH: { label: 'Mismatch', color: '#3b82f6' },
+  INDEX_MISMATCH: { label: 'Index Gap', color: '#3b82f6' },
+  ERROR_EVENT_MISMATCH: { label: 'OEE Error', color: '#ec4899' },
+  REPEATED_INSERT: { label: 'Repeated', color: '#14b8a6' },
 };
 
 export function IssueList({ changes = [], selectedId, onSelect }: Props) {
@@ -43,7 +45,11 @@ export function IssueList({ changes = [], selectedId, onSelect }: Props) {
                   </span>
                 </div>
                 <div className="change-meta">
-                  <span className="row-id">Row {change.sql_row_id}</span>
+                  {change.sql_row_id !== null ? (
+                    <span className="row-id">Row {change.sql_row_id}</span>
+                  ) : (
+                    <span className="row-id">MMI Line {change.mmi_line_numbers?.[0] || '?'}</span>
+                  )}
                   <span className="timestamp">@ {change.timestamp}</span>
                 </div>
                 <p className="change-description">{change.description}</p>

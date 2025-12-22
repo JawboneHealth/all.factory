@@ -3,7 +3,13 @@ Analysis module for finding data issues and generating change proposals.
 
 Each change has:
 - id: unique identifier
-- issue_type: DUPLICATE_INSERT | MISSING_PSA_TAPE | ORPHAN_ROW | INDEX_MISMATCH
+- issue_type: One of:
+    - DUPLICATE_INSERT: Overlapped events (Battery #2)
+    - MISSING_PSA_TAPE: Missing PSA tape picture path (Battery #1)
+    - ORPHAN_ROW: Missing SN & PRS with PSA images (Battery #3)
+    - INDEX_MISMATCH: Mismatched PSA image indices (Battery #4)
+    - ERROR_EVENT_MISMATCH: SQL/MMI error event discrepancy (Battery #5)
+    - REPEATED_INSERT: Same content logged multiple times (PCBA #1)
 - description: human readable description
 - timestamp: when the issue occurred
 - action: DELETE | UPDATE | FLAG
@@ -25,31 +31,40 @@ from .mmi_parser import find_events_near_timestamp
 
 def find_all_issues(
     mmi_events: list[dict], 
-    sql_data: list[dict]
+    sql_data: list[dict],
+    sql_error_data: list[dict] = None
 ) -> list[dict]:
     """
     Run all analysis and return change proposals.
     
     Args:
         mmi_events: Parsed MMI log events
-        sql_data: Parsed SQL export rows
+        sql_data: Parsed SQL export rows (main data table)
+        sql_error_data: Parsed SQL error table rows (optional, for OEE analysis)
     
     Returns:
         List of change proposals with before/after states
     """
     changes = []
     
-    # Issue #1: Missing PSA Tape Picture
+    # Issue #1: Missing PSA Tape Picture (Battery #1)
     changes.extend(find_missing_psa_tape(mmi_events, sql_data))
     
-    # Issue #2: Duplicate rows (overlapped events)
+    # Issue #2: Duplicate rows / overlapped events (Battery #2)
     changes.extend(find_duplicate_rows(mmi_events, sql_data))
     
-    # Issue #3: Orphan rows (missing SN & PRS)
+    # Issue #3: Orphan rows / missing SN & PRS (Battery #3)
     changes.extend(find_orphan_rows(mmi_events, sql_data))
     
-    # Issue #4: Index mismatch
+    # Issue #4: Index mismatch (Battery #4)
     changes.extend(find_index_mismatches(mmi_events, sql_data))
+    
+    # Issue #5: Error event mismatch between SQL and MMI (Battery #5)
+    if sql_error_data:
+        changes.extend(find_error_event_mismatches(mmi_events, sql_error_data))
+    
+    # Issue #6: Repeated INSERT statements (PCBA #1)
+    changes.extend(find_repeated_inserts(mmi_events, sql_data))
     
     return changes
 
@@ -271,7 +286,235 @@ def find_index_mismatches(mmi_events: list[dict], sql_data: list[dict]) -> list[
     return changes
 
 
-# === Helper Functions ===
+def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dict]) -> list[dict]:
+    """
+    Issue #5 (Battery #5): Find discrepancies between SQL error table and MMI error logs.
+    
+    Detects:
+    - Events recorded only in SQL (not in MMI)
+    - Clear time not updated in SQL
+    - Event logged once in MMI but twice in SQL
+    - Clear event missing in SQL
+    
+    This affects OEE (Overall Equipment Effectiveness) calculations since equipment
+    status is tracked via these error events for MTBF/MTBA metrics.
+    """
+    changes = []
+    
+    # Extract ERROR events from MMI log
+    mmi_errors = [e for e in mmi_events if e["event_type"] == "ERROR" or "ERROR" in e.get("content", "").upper()]
+    
+    # Build lookup of MMI error events by approximate time and error code
+    mmi_error_map = {}
+    for event in mmi_errors:
+        timestamp = event["timestamp"]
+        # Try to extract error code from content
+        error_code = _extract_error_code(event.get("content", ""))
+        key = f"{error_code}_{timestamp[:5]}"  # Group by error code and HH:MM
+        if key not in mmi_error_map:
+            mmi_error_map[key] = []
+        mmi_error_map[key].append(event)
+    
+    # Track which SQL errors we've seen
+    sql_error_by_time = {}
+    
+    for i, row in enumerate(sql_error_data):
+        row_id = row.get("ID") or i
+        error_code = row.get("ERROR_CODE") or row.get("ALARM_CODE") or row.get("CODE")
+        set_time = row.get("SET_TIME") or row.get("START_TIME") or row.get("OCCUR_TIME")
+        clear_time = row.get("CLEAR_TIME") or row.get("END_TIME") or row.get("RESET_TIME")
+        
+        timestamp = _extract_time(set_time)
+        key = f"{error_code}_{timestamp[:5]}" if timestamp else f"{error_code}_"
+        
+        # Check for duplicate SQL entries (same error logged twice)
+        dup_key = f"{error_code}_{timestamp}"
+        if dup_key in sql_error_by_time:
+            prev_row_id = sql_error_by_time[dup_key]
+            
+            # Find related MMI events
+            related_mmi = mmi_error_map.get(key, [])
+            
+            changes.append({
+                "id": f"error_dup_sql_{row_id}",
+                "issue_type": "ERROR_EVENT_MISMATCH",
+                "description": f"Error {error_code} logged twice in SQL at {timestamp} (duplicate of row {prev_row_id})",
+                "timestamp": timestamp,
+                "action": "DELETE",
+                "sql_row_id": row_id,
+                "sql_before": _clean_row(row),
+                "sql_after": None,
+                "duplicate_of": prev_row_id,
+                "mismatch_type": "DUPLICATE_IN_SQL",
+                "mmi_evidence": [e["raw"] for e in related_mmi[:5]],
+                "mmi_line_numbers": [e["line_number"] for e in related_mmi[:5]],
+                "status": "pending"
+            })
+        else:
+            sql_error_by_time[dup_key] = row_id
+        
+        # Check if error exists in MMI
+        mmi_matches = mmi_error_map.get(key, [])
+        
+        if not mmi_matches:
+            # Event in SQL but not in MMI
+            changes.append({
+                "id": f"error_sql_only_{row_id}",
+                "issue_type": "ERROR_EVENT_MISMATCH",
+                "description": f"Error {error_code} at {timestamp} exists in SQL but not found in MMI log",
+                "timestamp": timestamp,
+                "action": "FLAG",
+                "sql_row_id": row_id,
+                "sql_before": _clean_row(row),
+                "sql_after": None,
+                "mismatch_type": "SQL_ONLY",
+                "mmi_evidence": [],
+                "mmi_line_numbers": [],
+                "status": "pending"
+            })
+        
+        # Check for missing clear time
+        if set_time and (pd.isna(clear_time) or clear_time is None or clear_time == ""):
+            # Look for clear event in MMI near or after set time
+            clear_events = _find_error_clear_events(mmi_events, error_code, timestamp)
+            
+            suggested_clear_time = None
+            if clear_events:
+                suggested_clear_time = clear_events[0]["timestamp"]
+            
+            sql_after = dict(row)
+            if suggested_clear_time:
+                sql_after["CLEAR_TIME"] = suggested_clear_time
+            
+            changes.append({
+                "id": f"error_no_clear_{row_id}",
+                "issue_type": "ERROR_EVENT_MISMATCH",
+                "description": f"Error {error_code} at {timestamp} has no clear time in SQL",
+                "timestamp": timestamp,
+                "action": "UPDATE" if suggested_clear_time else "FLAG",
+                "sql_row_id": row_id,
+                "sql_before": _clean_row(row),
+                "sql_after": _clean_row(sql_after) if suggested_clear_time else None,
+                "suggested_clear_time": suggested_clear_time,
+                "mismatch_type": "MISSING_CLEAR_TIME",
+                "mmi_evidence": [e["raw"] for e in clear_events[:3]],
+                "mmi_line_numbers": [e["line_number"] for e in clear_events[:3]],
+                "status": "pending"
+            })
+    
+    # Check for errors in MMI but not in SQL
+    sql_error_codes = set()
+    for row in sql_error_data:
+        error_code = row.get("ERROR_CODE") or row.get("ALARM_CODE") or row.get("CODE")
+        set_time = row.get("SET_TIME") or row.get("START_TIME") or row.get("OCCUR_TIME")
+        timestamp = _extract_time(set_time)
+        sql_error_codes.add(f"{error_code}_{timestamp[:5]}" if timestamp else f"{error_code}_")
+    
+    for key, events in mmi_error_map.items():
+        if key not in sql_error_codes and events:
+            event = events[0]
+            error_code = key.split("_")[0]
+            
+            changes.append({
+                "id": f"error_mmi_only_{event['line_number']}",
+                "issue_type": "ERROR_EVENT_MISMATCH",
+                "description": f"Error {error_code} at {event['timestamp']} exists in MMI but not in SQL",
+                "timestamp": event["timestamp"],
+                "action": "FLAG",
+                "sql_row_id": None,
+                "sql_before": None,
+                "sql_after": None,
+                "mismatch_type": "MMI_ONLY",
+                "mmi_evidence": [e["raw"] for e in events[:5]],
+                "mmi_line_numbers": [e["line_number"] for e in events[:5]],
+                "status": "pending"
+            })
+    
+    return changes
+
+
+def find_repeated_inserts(mmi_events: list[dict], sql_data: list[dict]) -> list[dict]:
+    """
+    Issue #6 (PCBA #1): Find identical content logged multiple times in rapid succession.
+    
+    This occurs when Bit 6101 is turned on before Motor & PCBA Barcode operation completes,
+    causing log events to fire indefinitely until the barcode operation finishes.
+    The same INSERT statement gets executed dozens of times.
+    """
+    changes = []
+    
+    # Find all SQL INSERT events in MMI
+    insert_events = [e for e in mmi_events if e["event_type"] == "SQL_INSERT"]
+    
+    if len(insert_events) < 2:
+        return changes
+    
+    # Group consecutive identical inserts
+    i = 0
+    while i < len(insert_events):
+        current = insert_events[i]
+        current_values = current["data"].get("values", "")
+        
+        # Find all consecutive identical inserts
+        group = [current]
+        j = i + 1
+        
+        while j < len(insert_events):
+            next_event = insert_events[j]
+            next_values = next_event["data"].get("values", "")
+            
+            # Check if same content and within short time window (e.g., 30 seconds)
+            if next_values == current_values and _times_close(
+                current["timestamp"], 
+                next_event["timestamp"], 
+                window_seconds=30
+            ):
+                group.append(next_event)
+                j += 1
+            else:
+                break
+        
+        # If we found 3+ identical inserts, flag as repeated
+        if len(group) >= 3:
+            # Find corresponding SQL rows (if any)
+            timestamp = current["timestamp"]
+            affected_rows = []
+            
+            for row in sql_data:
+                row_time = _extract_time(row.get("DATE"))
+                if _times_close(row_time, timestamp, window_seconds=60):
+                    affected_rows.append(row)
+            
+            # First occurrence is valid, rest are duplicates to delete
+            for k, event in enumerate(group[1:], start=1):
+                # Try to match to a SQL row
+                matched_row = None
+                if k < len(affected_rows):
+                    matched_row = affected_rows[k]
+                
+                row_id = matched_row.get("ID") if matched_row else None
+                
+                changes.append({
+                    "id": f"repeated_{event['line_number']}",
+                    "issue_type": "REPEATED_INSERT",
+                    "description": f"INSERT repeated {len(group)} times at {timestamp} (occurrence {k+1} of {len(group)})",
+                    "timestamp": event["timestamp"],
+                    "action": "DELETE" if matched_row else "FLAG",
+                    "sql_row_id": row_id,
+                    "sql_before": _clean_row(matched_row) if matched_row else None,
+                    "sql_after": None,
+                    "repeat_count": len(group),
+                    "occurrence": k + 1,
+                    "first_line_number": group[0]["line_number"],
+                    "mmi_evidence": [e["raw"] for e in group[:10]],  # Show first 10
+                    "mmi_line_numbers": [e["line_number"] for e in group[:10]],
+                    "status": "pending"
+                })
+        
+        # Move to next group
+        i = j
+    
+    return changes
 
 def _extract_time(date_value) -> str:
     """Extract time string from datetime value in HH:MM:SS format"""
@@ -349,6 +592,8 @@ def _find_camera_events_near_time(events: list[dict], timestamp: str) -> list[di
 
 def _clean_row(row: dict) -> dict:
     """Clean a row dict for JSON serialization"""
+    if row is None:
+        return None
     cleaned = {}
     for k, v in row.items():
         if pd.isna(v):
@@ -358,3 +603,57 @@ def _clean_row(row: dict) -> dict:
         else:
             cleaned[k] = v
     return cleaned
+
+
+def _extract_error_code(content: str) -> str:
+    """Extract error code from MMI log content"""
+    if not content:
+        return ""
+    
+    # Common patterns for error codes
+    # Pattern 1: ERROR_CODE=12345 or ERROR:12345
+    match = re.search(r"ERROR[_:]?\s*(\d+)", content, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    
+    # Pattern 2: ALARM 12345 or Alarm: 12345
+    match = re.search(r"ALARM[:\s]*(\d+)", content, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    
+    # Pattern 3: Code in brackets [12345]
+    match = re.search(r"\[(\d{4,})\]", content)
+    if match:
+        return match.group(1)
+    
+    # Pattern 4: Just a 4+ digit number at start after timestamp
+    match = re.search(r"^\s*(\d{4,})", content)
+    if match:
+        return match.group(1)
+    
+    return ""
+
+
+def _find_error_clear_events(events: list[dict], error_code: str, after_timestamp: str) -> list[dict]:
+    """Find error clear/reset events for a given error code after a timestamp"""
+    result = []
+    after_secs = _normalize_time(after_timestamp)
+    
+    for event in events:
+        content = event.get("content", "").upper()
+        event_secs = _normalize_time(event["timestamp"])
+        
+        # Must be after the set time
+        if event_secs <= after_secs:
+            continue
+        
+        # Look for clear/reset indicators
+        is_clear = any(word in content for word in ["CLEAR", "RESET", "END", "RESOLVED", "OFF"])
+        
+        # Check if this error code is mentioned
+        has_code = error_code in content if error_code else True
+        
+        if is_clear and has_code:
+            result.append(event)
+    
+    return result

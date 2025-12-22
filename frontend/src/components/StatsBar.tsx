@@ -6,9 +6,11 @@ interface Props {
 
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   DUPLICATE_INSERT: { label: 'Duplicates', color: '#ef4444' },
-  MISSING_PSA_TAPE: { label: 'Missing', color: '#f59e0b' },
+  MISSING_PSA_TAPE: { label: 'Missing PSA', color: '#f59e0b' },
   ORPHAN_ROW: { label: 'Orphans', color: '#8b5cf6' },
-  INDEX_MISMATCH: { label: 'Mismatches', color: '#3b82f6' },
+  INDEX_MISMATCH: { label: 'Index Gaps', color: '#3b82f6' },
+  ERROR_EVENT_MISMATCH: { label: 'OEE Errors', color: '#ec4899' },
+  REPEATED_INSERT: { label: 'Repeated', color: '#14b8a6' },
 };
 
 export function StatsBar({ total = 0, byType = {}, byStatus = {} }: Props) {

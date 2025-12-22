@@ -32,7 +32,9 @@ def parse_mmi_log(content: str) -> list[dict]:
 
 def _classify(content: str) -> str:
     """Classify event type from content"""
-    if "MMI START" in content:
+    content_upper = content.upper()
+    
+    if "MMI START" in content_upper:
         return "MMI_START"
     if "insert into" in content.lower():
         return "SQL_INSERT"
@@ -51,12 +53,22 @@ def _classify(content: str) -> str:
     if content.startswith("+6,"):
         # Camera 2 - Battery PSA
         return "CAM2_PSA_BATTERY"
-    if "PLC DM" in content:
+    if "PLC DM" in content_upper:
         return "PLC_DM"
-    if "TOTAL LOG" in content:
+    if "TOTAL LOG" in content_upper:
         return "TOTAL_LOG"
-    if "ERROR" in content.upper():
-        return "ERROR"
+    
+    # Error event classification (for OEE tracking)
+    if "ERROR" in content_upper or "ALARM" in content_upper:
+        if any(word in content_upper for word in ["CLEAR", "RESET", "END", "RESOLVED", "OFF"]):
+            return "ERROR_CLEAR"
+        else:
+            return "ERROR"
+    
+    # PLC flag events (for detecting 6101 issues)
+    if "6101" in content or "FLAG" in content_upper:
+        return "PLC_FLAG"
+    
     return "OTHER"
 
 

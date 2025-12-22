@@ -12,11 +12,19 @@ const TYPE_COLORS: Record<string, string> = {
   MISSING_PSA_TAPE: '#f59e0b',
   ORPHAN_ROW: '#8b5cf6',
   INDEX_MISMATCH: '#3b82f6',
+  ERROR_EVENT_MISMATCH: '#ec4899',
+  REPEATED_INSERT: '#14b8a6',
 };
 
 const IMPORTANT_FIELDS = [
   'ID', 'DATE', 'PSA_TAPE_PIC', 'POWER_BOARD_SN', 'POWER_BOARD_PSA_PIC',
   'BATTERY_SN', 'BATTERY_PSA_PIC'
+];
+
+// Error table fields for OEE issues
+const ERROR_FIELDS = [
+  'ID', 'ERROR_CODE', 'ALARM_CODE', 'CODE', 'SET_TIME', 'START_TIME', 
+  'CLEAR_TIME', 'END_TIME', 'DESCRIPTION', 'STATE'
 ];
 
 function formatValue(val: any): string {
@@ -179,19 +187,75 @@ export function EvidencePanel({ change, onApprove, onReject }: Props) {
         <div className="diff-section">
           <div className="section-header">
             <span className="section-icon">📊</span>
-            <span className="section-title">SQL Data Change</span>
-            <span className="row-indicator">Row {change.sql_row_id}</span>
+            <span className="section-title">
+              {change.issue_type === 'ERROR_EVENT_MISMATCH' ? 'Error Event Data' : 'SQL Data Change'}
+            </span>
+            {change.sql_row_id !== null ? (
+              <span className="row-indicator">Row {change.sql_row_id}</span>
+            ) : (
+              <span className="row-indicator">MMI Only</span>
+            )}
           </div>
 
-          {change.action === 'DELETE' ? (
+          {/* Issue-specific metadata */}
+          {change.issue_type === 'ERROR_EVENT_MISMATCH' && change.mismatch_type && (
+            <div className="mismatch-info">
+              <span className={`mismatch-badge ${change.mismatch_type.toLowerCase().replace(/_/g, '-')}`}>
+                {change.mismatch_type.replace(/_/g, ' ')}
+              </span>
+              {change.suggested_clear_time && (
+                <span className="suggested-value">
+                  Suggested clear time: <code>{change.suggested_clear_time}</code>
+                </span>
+              )}
+            </div>
+          )}
+          
+          {change.issue_type === 'REPEATED_INSERT' && (
+            <div className="repeat-info">
+              <span className="repeat-badge">
+                Occurrence {change.occurrence} of {change.repeat_count}
+              </span>
+              <span className="first-line">
+                First at line {change.first_line_number}
+              </span>
+            </div>
+          )}
+
+          {/* No SQL data (MMI-only errors) */}
+          {change.sql_before === null && change.sql_row_id === null ? (
+            <div className="diff-table-container">
+              <div className="flag-banner">⚠ Event exists only in MMI log</div>
+            </div>
+          ) : change.action === 'DELETE' ? (
             <div className="diff-table-container">
               <div className="delete-banner">− Row will be deleted</div>
               <table className="diff-table">
                 <tbody>
-                  {IMPORTANT_FIELDS.map(field => (
+                  {(change.issue_type === 'ERROR_EVENT_MISMATCH' ? ERROR_FIELDS : IMPORTANT_FIELDS)
+                    .filter(field => change.sql_before?.[field] !== undefined)
+                    .map(field => (
                     <tr key={field} className="deleted-row">
                       <td className="field-name">{field}</td>
                       <td className="field-value deleted">
+                        {formatValue(change.sql_before?.[field])}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : change.action === 'FLAG' ? (
+            <div className="diff-table-container">
+              <div className="flag-banner">⚠ Flagged for review</div>
+              <table className="diff-table">
+                <tbody>
+                  {(change.issue_type === 'ERROR_EVENT_MISMATCH' ? ERROR_FIELDS : IMPORTANT_FIELDS)
+                    .filter(field => change.sql_before?.[field] !== undefined)
+                    .map(field => (
+                    <tr key={field}>
+                      <td className="field-name">{field}</td>
+                      <td className="field-value">
                         {formatValue(change.sql_before?.[field])}
                       </td>
                     </tr>
@@ -210,7 +274,9 @@ export function EvidencePanel({ change, onApprove, onReject }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {IMPORTANT_FIELDS.map(field => {
+                  {(change.issue_type === 'ERROR_EVENT_MISMATCH' ? ERROR_FIELDS : IMPORTANT_FIELDS)
+                    .filter(field => change.sql_before?.[field] !== undefined || change.sql_after?.[field] !== undefined)
+                    .map(field => {
                     const isChanged = changedFields.includes(field);
                     return (
                       <tr key={field} className={isChanged ? 'changed-row' : ''}>
