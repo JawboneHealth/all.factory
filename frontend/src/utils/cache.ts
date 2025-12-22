@@ -167,7 +167,7 @@ export interface AnalyticsCacheData {
 }
 
 const ANALYTICS_CACHE_KEY = 'analytics_data';
-const ANALYTICS_TTL = 5 * 60 * 1000; // 5 minutes
+const ANALYTICS_TTL = 60 * 60 * 1000; // 5 minutes
 
 /**
  * Cache analytics data from uploaded files
