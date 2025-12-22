@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { type SerialAnalysis, STATIONS } from '../types';
 
 interface Props {
@@ -277,46 +277,54 @@ export function SerialAnalysisView({ analyses }: Props) {
           {/* Production Runs */}
           {viewMode === 'runs' && currentAnalysis.runs && currentAnalysis.runs.length > 0 && (
             <div className="runs-container">
-              {/* Gantt Chart */}
+              {/* Gantt Chart - Horizontal Timeline */}
               <div className="gantt-section">
                 <h3>Production Timeline</h3>
-                <div className="gantt-chart">
-                  {currentAnalysis.runs.map((run, i) => {
-                    const totalTime = currentAnalysis.runs!.reduce(
-                      (sum, r) => sum + r.durationSec + (r.stoppageTime || 0), 0
-                    );
-                    const runWidth = (run.durationSec / totalTime) * 100;
-                    const stopWidth = ((run.stoppageTime || 0) / totalTime) * 100;
-                    
-                    return (
-                      <div key={i} className="gantt-row">
-                        <div 
-                          className="gantt-run"
-                          style={{ width: `${runWidth}%` }}
-                          title={`Run ${run.runNumber}: ${run.numUnits} units in ${formatDuration(run.durationSec)}`}
-                        >
-                          <span className="gantt-label">
-                            Run {run.runNumber}
-                          </span>
-                        </div>
-                        {run.stoppageTime && run.stoppageTime > 0 && (
+                <div className="gantt-timeline">
+                  <div className="gantt-track">
+                    {currentAnalysis.runs.map((run, i) => {
+                      const totalTime = currentAnalysis.runs!.reduce(
+                        (sum, r) => sum + r.durationSec + (r.stoppageTime || 0), 0
+                      );
+                      const runWidth = Math.max((run.durationSec / totalTime) * 100, 3); // Min 3%
+                      const stopWidth = run.stoppageTime ? Math.max(((run.stoppageTime) / totalTime) * 100, 2) : 0;
+                      
+                      return (
+                        <React.Fragment key={i}>
                           <div 
-                            className="gantt-stop"
-                            style={{ width: `${stopWidth}%` }}
-                            title={`Stoppage: ${formatDuration(run.stoppageTime)}`}
+                            className="gantt-segment gantt-run"
+                            style={{ width: `${runWidth}%` }}
+                            title={`Run ${run.runNumber}: ${run.numUnits} units in ${formatDuration(run.durationSec)}`}
                           >
-                            <span className="gantt-label">
-                              {formatDuration(run.stoppageTime)}
+                            <span className="segment-label">
+                              <span className="run-id">R{run.runNumber}</span>
+                              <span className="run-units">{run.numUnits}u</span>
                             </span>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          {stopWidth > 0 && (
+                            <div 
+                              className="gantt-segment gantt-stop"
+                              style={{ width: `${stopWidth}%` }}
+                              title={`Stoppage: ${formatDuration(run.stoppageTime || 0)}`}
+                            >
+                              <span className="segment-label stop-label">
+                                {formatDuration(run.stoppageTime || 0)}
+                              </span>
+                            </div>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="gantt-legend">
-                  <span className="gantt-start">{currentAnalysis.runs[0]?.startTime}</span>
-                  <span className="gantt-end">{currentAnalysis.runs[currentAnalysis.runs.length - 1]?.endTime}</span>
+                <div className="gantt-axis">
+                  <span className="axis-start">{currentAnalysis.runs[0]?.startTime}</span>
+                  <span className="axis-label">Timeline</span>
+                  <span className="axis-end">{currentAnalysis.runs[currentAnalysis.runs.length - 1]?.endTime}</span>
+                </div>
+                <div className="gantt-legend-bar">
+                  <span className="legend-item"><span className="dot run"></span> Production Run</span>
+                  <span className="legend-item"><span className="dot stop"></span> Stoppage</span>
                 </div>
               </div>
               

@@ -1,224 +1,222 @@
-/**
- * Simple cache utility for temporary data persistence
- * Uses sessionStorage with TTL (time-to-live) expiration
- * 
- * Data persists for the browser session and auto-expires after the TTL
- * Default TTL is 5 minutes (300000ms)
- */
+// Cache utilities for analytics data
+// Uses localStorage with fallback handling for quota errors
 
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-  expiry: number;
+const CACHE_KEY = 'cache_analytics_data';
+const CACHE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+
+interface CachedAnalyticsData {
+  stationAnalyses: any[];
+  crossStationAnalysis: any;
+  serialAnalyses: any[];
+  allEvents: any[];
+  stations: string[];
+  uploadedFiles: Record<string, string[]>;
+  analysisTimestamp: number;
+  cachedAt: number;
 }
 
-const DEFAULT_TTL = 60 * 60 * 1000; // 5 minutes in milliseconds
-
-/**
- * Store data in cache with expiration
- */
-export function cacheSet<T>(key: string, data: T, ttlMs: number = DEFAULT_TTL): void {
-  const entry: CacheEntry<T> = {
-    data,
-    timestamp: Date.now(),
-    expiry: Date.now() + ttlMs,
-  };
-  
+// Safe localStorage set with quota handling
+function cacheSet(key: string, value: string): boolean {
   try {
-    sessionStorage.setItem(`cache_${key}`, JSON.stringify(entry));
-  } catch (error) {
-    // Handle quota exceeded or other storage errors
-    console.warn('Cache storage failed:', error);
-    // Try to clear old cache entries
-    clearExpiredCache();
-    try {
-      sessionStorage.setItem(`cache_${key}`, JSON.stringify(entry));
-    } catch {
-      console.warn('Cache storage failed after cleanup');
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    if (e instanceof DOMException && (
+      e.code === 22 || // QuotaExceededError
+      e.code === 1014 || // NS_ERROR_DOM_QUOTA_REACHED (Firefox)
+      e.name === 'QuotaExceededError' ||
+      e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    )) {
+      console.warn('Cache storage quota exceeded, attempting cleanup...');
+      
+      // Try to clear old cache entries
+      try {
+        // Clear our own cache first
+        localStorage.removeItem(CACHE_KEY);
+        
+        // Try to set again
+        localStorage.setItem(key, value);
+        return true;
+      } catch (retryError) {
+        console.warn('Cache storage failed after cleanup, skipping cache');
+        return false;
+      }
     }
+    console.error('Cache storage error:', e);
+    return false;
   }
 }
 
-/**
- * Get data from cache if not expired
- * Returns null if not found or expired
- */
-export function cacheGet<T>(key: string): T | null {
+// Safe localStorage get
+function cacheGet(key: string): string | null {
   try {
-    const raw = sessionStorage.getItem(`cache_${key}`);
-    if (!raw) return null;
-    
-    const entry: CacheEntry<T> = JSON.parse(raw);
-    
-    // Check if expired
-    if (Date.now() > entry.expiry) {
-      sessionStorage.removeItem(`cache_${key}`);
-      return null;
-    }
-    
-    return entry.data;
-  } catch {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.error('Cache retrieval error:', e);
     return null;
   }
 }
 
-/**
- * Check if cache entry exists and is valid
- */
-export function cacheHas(key: string): boolean {
-  return cacheGet(key) !== null;
-}
-
-/**
- * Remove specific cache entry
- */
-export function cacheRemove(key: string): void {
-  sessionStorage.removeItem(`cache_${key}`);
-}
-
-/**
- * Clear all expired cache entries
- */
-export function clearExpiredCache(): void {
-  const keysToRemove: string[] = [];
+// Compress data by removing large arrays if needed
+function compressForCache(data: CachedAnalyticsData): CachedAnalyticsData {
+  // Calculate rough size
+  const fullJson = JSON.stringify(data);
+  const sizeKB = fullJson.length / 1024;
   
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key?.startsWith('cache_')) {
-      try {
-        const raw = sessionStorage.getItem(key);
-        if (raw) {
-          const entry = JSON.parse(raw);
-          if (Date.now() > entry.expiry) {
-            keysToRemove.push(key);
-          }
-        }
-      } catch {
-        keysToRemove.push(key!);
-      }
-    }
+  // If under 2MB, cache everything
+  if (sizeKB < 2048) {
+    return data;
   }
   
-  keysToRemove.forEach(key => sessionStorage.removeItem(key));
+  console.log(`Analytics data is ${sizeKB.toFixed(0)}KB, compressing for cache...`);
+  
+  // Create compressed version - keep metadata but reduce large arrays
+  const compressed: CachedAnalyticsData = {
+    ...data,
+    // Keep station analyses but remove large nested data
+    stationAnalyses: data.stationAnalyses.map(sa => ({
+      ...sa,
+      // Keep summary data, remove detailed event lists
+      events: undefined,
+      rawEvents: undefined,
+    })),
+    // Keep cross-station analysis
+    crossStationAnalysis: data.crossStationAnalysis,
+    // Keep serial analyses but trim if very large
+    serialAnalyses: data.serialAnalyses.slice(0, 100),
+    // Don't cache allEvents - too large
+    allEvents: [],
+  };
+  
+  const compressedJson = JSON.stringify(compressed);
+  console.log(`Compressed to ${(compressedJson.length / 1024).toFixed(0)}KB`);
+  
+  return compressed;
 }
 
-/**
- * Clear all cache entries
- */
-export function clearAllCache(): void {
-  const keysToRemove: string[] = [];
-  
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key?.startsWith('cache_')) {
-      keysToRemove.push(key);
-    }
-  }
-  
-  keysToRemove.forEach(key => sessionStorage.removeItem(key));
-}
-
-/**
- * Get cache entry metadata (timestamp, expiry, age)
- */
-export function cacheInfo(key: string): { 
-  exists: boolean; 
-  age?: number; 
-  remainingTtl?: number;
-  timestamp?: Date;
-} {
+// Check if data is too large to cache
+function isDataTooLarge(data: any): boolean {
   try {
-    const raw = sessionStorage.getItem(`cache_${key}`);
-    if (!raw) return { exists: false };
-    
-    const entry = JSON.parse(raw);
-    const now = Date.now();
-    
-    if (now > entry.expiry) {
-      return { exists: false };
-    }
-    
-    return {
-      exists: true,
-      age: now - entry.timestamp,
-      remainingTtl: entry.expiry - now,
-      timestamp: new Date(entry.timestamp),
-    };
+    const json = JSON.stringify(data);
+    // localStorage limit is typically 5-10MB, stay under 4MB to be safe
+    return json.length > 4 * 1024 * 1024;
   } catch {
-    return { exists: false };
+    return true;
   }
 }
 
-// ============================================
-// Analytics-specific cache helpers
-// ============================================
-
-export interface AnalyticsCacheData {
-  // Analysis results
-  stationAnalyses: any[];
-  crossStationAnalysis: any | null;
-  serialAnalyses: any[];
-  allEvents: any[];
+export function cacheAnalyticsData(data: Omit<CachedAnalyticsData, 'cachedAt'>): void {
+  const cacheData: CachedAnalyticsData = {
+    ...data,
+    cachedAt: Date.now(),
+  };
   
-  // Metadata
-  stations: string[];
-  uploadedFiles: string[];
-  analysisTimestamp: number;
+  // Try to compress if too large
+  let dataToCache = cacheData;
+  if (isDataTooLarge(cacheData)) {
+    dataToCache = compressForCache(cacheData);
+    
+    // If still too large after compression, skip caching
+    if (isDataTooLarge(dataToCache)) {
+      console.warn('Analytics data too large to cache even after compression, skipping');
+      return;
+    }
+  }
+  
+  const json = JSON.stringify(dataToCache);
+  const success = cacheSet(CACHE_KEY, json);
+  
+  if (success) {
+    console.log(`Analytics cached: ${(json.length / 1024).toFixed(0)}KB`);
+  }
 }
 
-const ANALYTICS_CACHE_KEY = 'analytics_data';
-const ANALYTICS_TTL = 60 * 60 * 1000; // 5 minutes
-
-/**
- * Cache analytics data from uploaded files
- */
-export function cacheAnalyticsData(data: AnalyticsCacheData): void {
-  cacheSet(ANALYTICS_CACHE_KEY, data, ANALYTICS_TTL);
+export function getCachedAnalyticsData(): CachedAnalyticsData | null {
+  const json = cacheGet(CACHE_KEY);
+  if (!json) return null;
+  
+  try {
+    const data = JSON.parse(json) as CachedAnalyticsData;
+    return data;
+  } catch (e) {
+    console.error('Failed to parse cached analytics data:', e);
+    localStorage.removeItem(CACHE_KEY);
+    return null;
+  }
 }
 
-/**
- * Get cached analytics data
- */
-export function getCachedAnalyticsData(): AnalyticsCacheData | null {
-  return cacheGet<AnalyticsCacheData>(ANALYTICS_CACHE_KEY);
-}
-
-/**
- * Check if analytics cache is valid
- */
 export function hasValidAnalyticsCache(): boolean {
-  return cacheHas(ANALYTICS_CACHE_KEY);
+  const data = getCachedAnalyticsData();
+  if (!data) return false;
+  
+  const age = Date.now() - data.cachedAt;
+  if (age > CACHE_EXPIRY_MS) {
+    console.log('Analytics cache expired');
+    localStorage.removeItem(CACHE_KEY);
+    return false;
+  }
+  
+  return true;
 }
 
-/**
- * Get analytics cache info
- */
-export function getAnalyticsCacheInfo() {
-  const info = cacheInfo(ANALYTICS_CACHE_KEY);
-  if (!info.exists) return null;
+export function getAnalyticsCacheInfo(): {
+  exists: boolean;
+  age: number;
+  ageStr: string;
+  remaining: number;
+  remainingStr: string;
+  stations: string[];
+  fileCount: number;
+} | null {
+  const data = getCachedAnalyticsData();
+  if (!data) return null;
+  
+  const age = Date.now() - data.cachedAt;
+  const remaining = Math.max(0, CACHE_EXPIRY_MS - age);
+  
+  const formatTime = (ms: number) => {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  };
+  
+  const fileCount = Object.values(data.uploadedFiles || {})
+    .reduce((sum, files) => sum + (files?.length || 0), 0);
   
   return {
-    ...info,
-    ageFormatted: info.age ? formatDuration(info.age) : undefined,
-    remainingFormatted: info.remainingTtl ? formatDuration(info.remainingTtl) : undefined,
+    exists: true,
+    age,
+    ageStr: formatTime(age),
+    remaining,
+    remainingStr: formatTime(remaining),
+    stations: data.stations || [],
+    fileCount,
   };
 }
 
-/**
- * Clear analytics cache
- */
 export function clearAnalyticsCache(): void {
-  cacheRemove(ANALYTICS_CACHE_KEY);
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    console.log('Analytics cache cleared');
+  } catch (e) {
+    console.error('Failed to clear analytics cache:', e);
+  }
 }
 
-// Helper to format duration
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  
-  if (minutes > 0) {
-    return `${minutes}m ${remainingSeconds}s`;
+// Utility to clear all app caches if storage is getting full
+export function clearAllCaches(): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('cache_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    console.log(`Cleared ${keysToRemove.length} cache entries`);
+  } catch (e) {
+    console.error('Failed to clear caches:', e);
   }
-  return `${seconds}s`;
 }

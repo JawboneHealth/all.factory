@@ -55,7 +55,6 @@ export function ErrorTimelineView({ analyses }: Props) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Layout constants
-  const LABEL_WIDTH = 200;
   const TIME_AXIS_HEIGHT = 50;
   const LANE_HEIGHT = 48;
   const LANE_MARGIN = 2;
@@ -369,8 +368,8 @@ export function ErrorTimelineView({ analyses }: Props) {
     setIsDragging(false);
   };
 
-  // Wheel handler for zoom/pan
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  // Wheel handler for zoom/pan - needs to be attached with { passive: false }
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
 
     const canvas = canvasRef.current;
@@ -408,6 +407,17 @@ export function ErrorTimelineView({ analyses }: Props) {
       }));
     }
   }, []);
+
+  // Attach wheel event listener with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
 
   const resetView = () => {
     setViewState({ offsetX: 0, offsetY: 0, scale: 1 });
@@ -521,7 +531,6 @@ export function ErrorTimelineView({ analyses }: Props) {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
 

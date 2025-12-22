@@ -62,7 +62,6 @@ export function EventTimelineView({ events }: Props) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Constants for layout
-  const LABEL_WIDTH = 160;
   const TIME_AXIS_HEIGHT = 50;
   const LANE_HEIGHT = 56;
   const LANE_MARGIN = 2;
@@ -329,7 +328,8 @@ export function EventTimelineView({ events }: Props) {
   };
 
   // Scroll to zoom (up=in, down=out) + horizontal pan + shift for vertical
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  // Use native event listener with { passive: false } to allow preventDefault
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     
     const canvas = canvasRef.current;
@@ -337,7 +337,6 @@ export function EventTimelineView({ events }: Props) {
     
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
     
     // Check for pinch-to-zoom (trackpad)
     if (e.ctrlKey || e.metaKey) {
@@ -370,6 +369,17 @@ export function EventTimelineView({ events }: Props) {
       }));
     }
   }, []);
+
+  // Attach wheel event listener with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
 
   const toggleStation = (code: string) => {
     setSelectedStations(prev => {
@@ -503,7 +513,6 @@ export function EventTimelineView({ events }: Props) {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
 
