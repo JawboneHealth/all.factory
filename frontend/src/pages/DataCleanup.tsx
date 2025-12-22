@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { FileUploader } from '../components/FileUploader';
 import { StatsBar } from '../components/StatsBar';
 import { IssueList } from '../components/IssueList';
@@ -18,6 +18,24 @@ export function DataCleanup() {
   const [byStatus, setByStatus] = useState<Record<string, number>>({ pending: 0, approved: 0, rejected: 0 });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+
+  // Filter changes based on active filter
+  const filteredChanges = useMemo(() => {
+    if (!activeFilter) return changes;
+
+    if (activeFilter.startsWith('type:')) {
+      const issueType = activeFilter.replace('type:', '');
+      return changes.filter(c => c.issue_type === issueType);
+    }
+
+    if (activeFilter.startsWith('status:')) {
+      const status = activeFilter.replace('status:', '');
+      return changes.filter(c => c.status === status);
+    }
+
+    return changes;
+  }, [changes, activeFilter]);
 
   const uploadMMI = useCallback(async (file: File) => {
     setMmiStatus('uploading');
@@ -105,6 +123,7 @@ export function DataCleanup() {
     setByType({});
     setByStatus({ pending: 0, approved: 0, rejected: 0 });
     setAnalyzed(false);
+    setActiveFilter(null);
   }, []);
 
   const canAnalyze = mmiStatus === 'success' && sqlStatus === 'success';
@@ -206,6 +225,18 @@ export function DataCleanup() {
               <p>PSA image indices are too far apart, indicating wrong file references.</p>
               <span className="issue-tag">Auto-correct indices</span>
             </div>
+            <div className="issue-card oee-error">
+              <div className="issue-icon">⚡</div>
+              <h4>OEE Errors</h4>
+              <p>Discrepancies between SQL error table and MMI error logs.</p>
+              <span className="issue-tag">Fix for accurate OEE</span>
+            </div>
+            <div className="issue-card repeated">
+              <div className="issue-icon">⟳</div>
+              <h4>Repeated Inserts</h4>
+              <p>Same content logged multiple times due to PLC 6101 timing issues.</p>
+              <span className="issue-tag">Remove duplicates</span>
+            </div>
           </div>
         </section>
       </div>
@@ -229,11 +260,27 @@ export function DataCleanup() {
         </div>
       </div>
 
-      <StatsBar total={changes.length} byType={byType} byStatus={byStatus} />
+      <StatsBar 
+        total={changes.length} 
+        byType={byType} 
+        byStatus={byStatus}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+      />
+
+      {activeFilter && (
+        <div className="active-filter-banner">
+          <span>
+            Showing: <strong>{activeFilter.replace('type:', '').replace('status:', '').replace(/_/g, ' ')}</strong>
+            {' '}({filteredChanges.length} of {changes.length})
+          </span>
+          <button onClick={() => setActiveFilter(null)}>✕ Clear filter</button>
+        </div>
+      )}
 
       <div className="split-pane">
         <IssueList
-          changes={changes}
+          changes={filteredChanges}
           selectedId={selectedChange?.id || null}
           onSelect={setSelectedChange}
         />
