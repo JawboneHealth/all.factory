@@ -1,11 +1,51 @@
+"""
+SQL Parser - Handles both Excel (.xlsx) and CSV (.csv) file formats.
+
+The parser auto-detects the file format based on content inspection.
+"""
+
 import pandas as pd
 import io
 from typing import Optional
 
 
+def _detect_and_read(content: bytes) -> pd.DataFrame:
+    """
+    Detect file format and parse accordingly.
+    
+    Tries Excel first (for .xlsx files), falls back to CSV.
+    """
+    # Try Excel first
+    try:
+        df = pd.read_excel(io.BytesIO(content), sheet_name=0)
+        return df
+    except Exception:
+        pass
+    
+    # Try CSV
+    try:
+        # Decode bytes to string for CSV parsing
+        content_str = content.decode('utf-8', errors='ignore')
+        df = pd.read_csv(io.StringIO(content_str))
+        return df
+    except Exception:
+        pass
+    
+    # Try with different encodings
+    for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
+        try:
+            content_str = content.decode(encoding, errors='ignore')
+            df = pd.read_csv(io.StringIO(content_str))
+            return df
+        except Exception:
+            continue
+    
+    raise ValueError("Could not parse file as Excel or CSV")
+
+
 def parse_sql_export(content: bytes) -> list[dict]:
-    """Parse SQL export from Excel file into list of row dicts"""
-    df = pd.read_excel(io.BytesIO(content), sheet_name=0)
+    """Parse SQL export from Excel or CSV file into list of row dicts"""
+    df = _detect_and_read(content)
     # Convert NaN to None for cleaner JSON
     df = df.where(pd.notnull(df), None)
     return df.to_dict(orient="records")
@@ -13,7 +53,7 @@ def parse_sql_export(content: bytes) -> list[dict]:
 
 def parse_sql_export_df(content: bytes) -> pd.DataFrame:
     """Parse SQL export and return DataFrame"""
-    df = pd.read_excel(io.BytesIO(content), sheet_name=0)
+    df = _detect_and_read(content)
     return df
 
 
