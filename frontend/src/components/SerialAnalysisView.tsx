@@ -1,4 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { 
+  BarChart3, Package, Clock, TrendingUp, OctagonX, Pause, 
+  Play, BarChart2, LineChart 
+} from 'lucide-react';
 import { type SerialAnalysis, STATIONS } from '../types';
 
 interface Props {
@@ -64,7 +68,7 @@ export function SerialAnalysisView({ analyses }: Props) {
   if (analyses.length === 0) {
     return (
       <div className="serial-empty">
-        <span className="empty-icon">📊</span>
+        <span className="empty-icon"><BarChart3 size={48} /></span>
         <h3>No Serial Analysis Data</h3>
         <p>Upload barcode logs to see unit-by-unit analysis</p>
       </div>
@@ -100,7 +104,7 @@ export function SerialAnalysisView({ analyses }: Props) {
           {/* Stats Row */}
           <div className="stats-row">
             <div className="stat-card primary">
-              <span className="stat-icon">📦</span>
+              <span className="stat-icon"><Package size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.totalUnits || 0}</span>
                 <span className="stat-label">Total Units</span>
@@ -108,7 +112,7 @@ export function SerialAnalysisView({ analyses }: Props) {
             </div>
             
             <div className="stat-card">
-              <span className="stat-icon">⏱️</span>
+              <span className="stat-icon"><Clock size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.medianGap?.toFixed(1) || 0}<small>s</small></span>
                 <span className="stat-label">Median Gap</span>
@@ -116,7 +120,7 @@ export function SerialAnalysisView({ analyses }: Props) {
             </div>
             
             <div className="stat-card">
-              <span className="stat-icon">📈</span>
+              <span className="stat-icon"><TrendingUp size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.meanGap?.toFixed(1) || 0}<small>s</small></span>
                 <span className="stat-label">Mean Gap</span>
@@ -124,7 +128,7 @@ export function SerialAnalysisView({ analyses }: Props) {
             </div>
             
             <div className={`stat-card ${(currentAnalysis.stats?.stoppages || 0) > 3 ? 'warning' : ''}`}>
-              <span className="stat-icon">🛑</span>
+              <span className="stat-icon"><OctagonX size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.stoppages || 0}</span>
                 <span className="stat-label">Stoppages</span>
@@ -132,7 +136,7 @@ export function SerialAnalysisView({ analyses }: Props) {
             </div>
             
             <div className="stat-card">
-              <span className="stat-icon">⏸️</span>
+              <span className="stat-icon"><Pause size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{formatDuration(currentAnalysis.stats?.totalStoppageTime || 0)}</span>
                 <span className="stat-label">Stoppage Time</span>
@@ -140,7 +144,7 @@ export function SerialAnalysisView({ analyses }: Props) {
             </div>
             
             <div className="stat-card">
-              <span className="stat-icon">🏃</span>
+              <span className="stat-icon"><Play size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.runs?.length || 0}</span>
                 <span className="stat-label">Production Runs</span>
@@ -154,13 +158,13 @@ export function SerialAnalysisView({ analyses }: Props) {
               className={viewMode === 'gaps' ? 'active' : ''}
               onClick={() => setViewMode('gaps')}
             >
-              📊 Gap Chart
+              <BarChart2 size={16} /> Gap Chart
             </button>
             <button 
               className={viewMode === 'runs' ? 'active' : ''}
               onClick={() => setViewMode('runs')}
             >
-              📈 Production Runs
+              <LineChart size={16} /> Production Runs
             </button>
           </div>
 
@@ -196,36 +200,24 @@ export function SerialAnalysisView({ analyses }: Props) {
                   ))}
                 </div>
                 
-                {/* Chart Area */}
+                {/* Bars */}
                 <div className="chart-area">
-                  {/* Grid Lines */}
-                  <div className="grid-lines">
-                    {chartData.yTicks.map((tick, i) => (
-                      <div 
-                        key={i} 
-                        className="grid-line"
-                        style={{ bottom: `${(tick / chartData.maxGap) * 100}%` }}
-                      />
-                    ))}
-                  </div>
-                  
-                  {/* Bars */}
                   <div className="bars">
-                    {chartData.units.slice(1).map((unit, i) => {
-                      const heightPct = Math.min((unit.gap / chartData.maxGap) * 100, 100);
+                    {chartData.units.slice(1).map((unit, idx) => {
                       const color = getGapColor(unit.gap, unit.isStoppage, unit.isBuffer);
-                      const isHovered = hoveredUnit === i;
+                      const heightPct = Math.min((unit.gap / chartData.maxGap) * 100, 100);
+                      const isHovered = hoveredUnit === idx;
                       
                       return (
                         <div 
-                          key={i}
+                          key={idx}
                           className={`bar-wrapper ${isHovered ? 'hovered' : ''}`}
-                          onMouseEnter={() => setHoveredUnit(i)}
+                          onMouseEnter={() => setHoveredUnit(idx)}
                           onMouseLeave={() => setHoveredUnit(null)}
                         >
                           <div 
                             className="bar"
-                            style={{ 
+                            style={{
                               height: `${heightPct}%`,
                               backgroundColor: color,
                             }}

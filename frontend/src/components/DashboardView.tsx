@@ -1,4 +1,9 @@
 import { useState, useMemo } from 'react';
+import { 
+  Package, Factory, AlertTriangle, Clock, Flame, Info, 
+  BarChart3, Wrench, TrendingUp, ChevronDown, ChevronRight, 
+  MailOpen
+} from 'lucide-react';
 import { type StationAnalysis, STATIONS } from '../types';
 
 interface Props {
@@ -65,7 +70,7 @@ function InfoTooltip({ metric }: { metric: string }) {
       onMouseLeave={() => setShow(false)}
       onClick={(e) => { e.stopPropagation(); setShow(!show); }}
     >
-      <span className="info-icon">ⓘ</span>
+      <span className="info-icon"><Info size={12} /></span>
       {show && (
         <div className="info-tooltip">
           <strong>{info.title}</strong>
@@ -126,7 +131,7 @@ export function DashboardView({ analyses }: Props) {
       {/* Summary Cards */}
       <div className="summary-grid">
         <div className="summary-card">
-          <div className="summary-icon blue">📦</div>
+          <div className="summary-icon blue"><Package size={24} /></div>
           <div className="summary-data">
             <div className="summary-value">{totals.units.toLocaleString()}</div>
             <div className="summary-label">Total Units Produced</div>
@@ -135,7 +140,7 @@ export function DashboardView({ analyses }: Props) {
         </div>
         
         <div className="summary-card">
-          <div className="summary-icon green">🏭</div>
+          <div className="summary-icon green"><Factory size={24} /></div>
           <div className="summary-data">
             <div className="summary-value">{analyses.length}</div>
             <div className="summary-label">Active Stations</div>
@@ -144,7 +149,7 @@ export function DashboardView({ analyses }: Props) {
         </div>
         
         <div className={`summary-card ${totals.errors > 50 ? 'alert' : ''}`}>
-          <div className="summary-icon red">⚠️</div>
+          <div className="summary-icon red"><AlertTriangle size={24} /></div>
           <div className="summary-data">
             <div className="summary-value">{totals.errors}</div>
             <div className="summary-label">Total Errors</div>
@@ -153,7 +158,7 @@ export function DashboardView({ analyses }: Props) {
         </div>
         
         <div className="summary-card">
-          <div className="summary-icon orange">⏱️</div>
+          <div className="summary-icon orange"><Clock size={24} /></div>
           <div className="summary-data">
             <div className="summary-value">{totals.downtime.toFixed(1)}<span className="unit">min</span></div>
             <div className="summary-label">Total Downtime</div>
@@ -164,7 +169,7 @@ export function DashboardView({ analyses }: Props) {
         {bottleneck && bottleneck.barcode?.cycleTimeMedian && (
           <div className="summary-card wide bottleneck">
             <div className="summary-icon" style={{ background: `linear-gradient(135deg, ${getStationColor(bottleneck.station.code)}, ${getStationColor(bottleneck.station.code)}88)` }}>
-              🔥
+              <Flame size={24} />
             </div>
             <div className="summary-data">
               <div className="summary-value">{bottleneck.station.icon} {bottleneck.station.name}</div>
@@ -213,7 +218,7 @@ export function DashboardView({ analyses }: Props) {
                     {health}
                   </div>
                   <button className="expand-toggle" aria-label={isExpanded ? 'Collapse' : 'Expand'}>
-                    {isExpanded ? '▼' : '▶'}
+                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
                 </div>
               </div>
@@ -266,7 +271,7 @@ export function DashboardView({ analyses }: Props) {
                     <div className="expanded-details">
                       {/* Detailed Statistics */}
                       <div className="detail-section">
-                        <h4 className="detail-title">📊 Detailed Statistics</h4>
+                        <h4 className="detail-title"><BarChart3 size={16} /> Detailed Statistics</h4>
                         <div className="detail-grid">
                           <div className="detail-item">
                             <span className="detail-label">First Event</span>
@@ -302,7 +307,7 @@ export function DashboardView({ analyses }: Props) {
                       {/* Reliability Metrics */}
                       {(analysis.errors?.mtbf || analysis.errors?.mtba) && (
                         <div className="detail-section">
-                          <h4 className="detail-title">🔧 Reliability Metrics</h4>
+                          <h4 className="detail-title"><Wrench size={16} /> Reliability Metrics</h4>
                           <div className="reliability-cards">
                             {analysis.errors?.mtbf && (
                               <div className="reliability-card">
@@ -328,7 +333,7 @@ export function DashboardView({ analyses }: Props) {
                       {hourlyEntries.length > 0 && (
                         <div className="detail-section">
                           <h4 className="detail-title">
-                            📈 Hourly Activity
+                            <TrendingUp size={16} /> Hourly Activity
                             <span className="detail-subtitle">{hourlyEntries.length} hours</span>
                           </h4>
                           <div className="bar-chart">
@@ -364,7 +369,7 @@ export function DashboardView({ analyses }: Props) {
                       {errorEntries.length > 0 && (
                         <div className="detail-section">
                           <h4 className="detail-title">
-                            ⚠️ Top Error Codes
+                            <AlertTriangle size={16} /> Top Error Codes
                             <span className="detail-subtitle">{Object.keys(errorData).length} unique codes</span>
                           </h4>
                           <div className="error-bars">
@@ -388,7 +393,7 @@ export function DashboardView({ analyses }: Props) {
                       )}
 
                       <div className="expand-hint" onClick={() => toggleExpand(analysis.station.code)}>
-                        ▲ Click to collapse
+                        <ChevronDown size={14} /> Click to collapse
                       </div>
                     </div>
                   ) : (
@@ -445,14 +450,14 @@ export function DashboardView({ analyses }: Props) {
                       )}
 
                       <div className="expand-hint" onClick={() => toggleExpand(analysis.station.code)}>
-                        ▼ Click for detailed breakdown
+                        <ChevronRight size={14} /> Click for detailed breakdown
                       </div>
                     </div>
                   )}
                 </>
               ) : (
                 <div className="no-data">
-                  <span className="no-data-icon">📭</span>
+                  <span className="no-data-icon"><MailOpen size={24} /></span>
                   <span>No barcode data</span>
                   <span className="no-data-hint">Upload barcode log to see metrics</span>
                 </div>

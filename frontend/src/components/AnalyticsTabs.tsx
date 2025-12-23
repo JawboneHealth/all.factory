@@ -1,3 +1,4 @@
+import { LayoutDashboard, AlertTriangle, TrendingUp, Link2, Hash } from 'lucide-react';
 import { type AnalyticsTab, type AnalyticsState } from '../types';
 
 interface Props {
@@ -6,12 +7,12 @@ interface Props {
   state: AnalyticsState;
 }
 
-const TABS: Array<{ id: AnalyticsTab; label: string; icon: string }> = [
-  { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-  { id: 'errors', label: 'Error Timeline', icon: '⚠️' },
-  { id: 'timeline', label: 'Event Timeline', icon: '📈' },
-  { id: 'issues', label: 'Cross-Station Issues', icon: '🔗' },
-  { id: 'serial', label: 'Serial Analysis', icon: '🔢' },
+const TABS: Array<{ id: AnalyticsTab; label: string; icon: React.ReactNode }> = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+  { id: 'errors', label: 'Error Timeline', icon: <AlertTriangle size={16} /> },
+  { id: 'timeline', label: 'Event Timeline', icon: <TrendingUp size={16} /> },
+  { id: 'issues', label: 'Cross-Station Issues', icon: <Link2 size={16} /> },
+  { id: 'serial', label: 'Serial Analysis', icon: <Hash size={16} /> },
 ];
 
 export function AnalyticsTabs({ activeTab, onTabChange, state }: Props) {

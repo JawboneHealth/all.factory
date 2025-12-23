@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Sparkles, GripHorizontal, ArrowUpDown, Search, MousePointer } from 'lucide-react';
 import { type StationAnalysis, STATIONS } from '../types';
 
 interface Props {
@@ -247,6 +248,7 @@ export function ErrorTimelineView({ analyses }: Props) {
     ctx.fillStyle = COLORS.timeAxisBg;
     ctx.fillRect(0, 0, width, TIME_AXIS_HEIGHT);
 
+    // Time axis bottom border
     ctx.strokeStyle = COLORS.timeAxisBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -257,7 +259,7 @@ export function ErrorTimelineView({ analyses }: Props) {
     // Time labels
     const timeSpan = timeRange.max - timeRange.min;
     const visibleWidth = width / scale;
-    const tickCount = Math.max(3, Math.min(12, Math.floor(visibleWidth / 100)));
+    const tickCount = Math.max(3, Math.min(12, Math.floor(visibleWidth / 120)));
 
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = '500 11px ui-monospace, SFMono-Regular, monospace';
@@ -278,31 +280,25 @@ export function ErrorTimelineView({ analyses }: Props) {
       });
 
       ctx.fillText(label, x, 32);
-
-      // Tick mark
-      ctx.strokeStyle = COLORS.timeAxisBorder;
-      ctx.beginPath();
-      ctx.moveTo(x, TIME_AXIS_HEIGHT - 8);
-      ctx.lineTo(x, TIME_AXIS_HEIGHT);
-      ctx.stroke();
     }
   }, [viewState, swimlanes, timeRange, hoveredError]);
 
   // Resize canvas
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
     const resize = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
+
       const dpr = window.devicePixelRatio || 1;
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      canvas.style.width = `${container.clientWidth}px`;
+      canvas.style.height = `${container.clientHeight}px`;
+
       const ctx = canvas.getContext('2d');
       if (ctx) ctx.scale(dpr, dpr);
+
       draw();
     };
 
@@ -316,12 +312,12 @@ export function ErrorTimelineView({ analyses }: Props) {
   }, [draw]);
 
   // Mouse handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     setDragStart({ x: e.clientX - viewState.offsetX, y: e.clientY - viewState.offsetY });
-  };
+  }, [viewState]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -334,41 +330,42 @@ export function ErrorTimelineView({ analyses }: Props) {
       return;
     }
 
-    // Hit test for hover
+    // Hit detection for hover
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-
     const { offsetX, offsetY, scale } = viewState;
-    const timeSpan = timeRange.max - timeRange.min;
-    const width = rect.width;
+    const dotRadius = Math.max(5, 7 * Math.min(scale, 2));
 
     let found: ErrorEvent | null = null;
+    const timeSpan = timeRange.max - timeRange.min;
 
-    swimlanes.forEach((lane, laneIndex) => {
+    for (const lane of swimlanes) {
+      const laneIndex = swimlanes.indexOf(lane);
       const laneY = offsetY + laneIndex * (LANE_HEIGHT + LANE_MARGIN) + TIME_AXIS_HEIGHT;
 
-      lane.errors.forEach(error => {
+      for (const error of lane.errors) {
         const progress = (error.startTimeMs - timeRange.min) / timeSpan;
-        const x = offsetX + progress * width * scale;
+        const x = offsetX + progress * canvas.clientWidth * scale;
         const y = laneY + LANE_HEIGHT / 2;
 
         const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
-        if (dist < 15) {
+        if (dist < dotRadius * 2) {
           found = error;
+          break;
         }
-      });
-    });
+      }
+      if (found) break;
+    }
 
     setHoveredError(found);
     setTooltipPos({ x: e.clientX, y: e.clientY });
-  };
+  }, [isDragging, dragStart, viewState, swimlanes, timeRange]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+  }, []);
 
-  // Wheel handler for zoom/pan - needs to be attached with { passive: false }
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
 
@@ -537,7 +534,7 @@ export function ErrorTimelineView({ analyses }: Props) {
           {/* Empty state */}
           {swimlanes.length === 0 && (
             <div className="canvas-empty">
-              <span className="empty-icon">✨</span>
+              <span className="empty-icon"><Sparkles size={32} /></span>
               <p>No errors match the current filters</p>
             </div>
           )}
@@ -605,11 +602,11 @@ export function ErrorTimelineView({ analyses }: Props) {
 
       {/* Help hint */}
       <div className="timeline-hint">
-        <span>🖱️ Drag to pan</span>
-        <span>⚙️ Scroll horizontal</span>
-        <span>⇧ Shift+scroll vertical</span>
-        <span>🔍 Pinch/⌘+scroll zoom</span>
-        <span>✨ Hover for details</span>
+        <span><MousePointer size={14} /> Drag to pan</span>
+        <span><GripHorizontal size={14} /> Scroll horizontal</span>
+        <span><ArrowUpDown size={14} /> Shift+scroll vertical</span>
+        <span><Search size={14} /> Pinch/⌘+scroll zoom</span>
+        <span><Sparkles size={14} /> Hover for details</span>
       </div>
     </div>
   );

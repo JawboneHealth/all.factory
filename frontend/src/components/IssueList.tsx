@@ -1,3 +1,4 @@
+import { Check, X } from 'lucide-react';
 import { type Change } from '../types';
 
 interface Props {
@@ -55,7 +56,7 @@ export function IssueList({ changes = [], selectedId, onSelect }: Props) {
                 <p className="change-description">{change.description}</p>
                 {change.status !== 'pending' && (
                   <span className={`status-badge ${change.status}`}>
-                    {change.status === 'approved' ? '✓ Approved' : '✗ Rejected'}
+                    {change.status === 'approved' ? <><Check size={12} /> Approved</> : <><X size={12} /> Rejected</>}
                   </span>
                 )}
               </button>

@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { Check, X, Plus } from 'lucide-react';
 import { type Station, type StationFiles } from '../types';
 
 interface Props {
@@ -54,14 +55,14 @@ export function StationFileUpload({ station, files, onUpload, onRemove }: Props)
           >
             {filename ? (
               <>
-                <span className="file-icon">✓</span>
+                <span className="file-icon"><Check size={14} /></span>
                 <span className="file-name" title={filename}>{filename}</span>
                 <button 
                   className="remove-file" 
                   onClick={() => onRemove(type)}
                   title="Remove file"
                 >
-                  ✕
+                  <X size={14} />
                 </button>
               </>
             ) : (
@@ -74,7 +75,7 @@ export function StationFileUpload({ station, files, onUpload, onRemove }: Props)
                   className="file-input"
                 />
                 <label htmlFor={`${station.code}-${type}`} className="file-label">
-                  <span className="file-icon">+</span>
+                  <span className="file-icon"><Plus size={14} /></span>
                   <span className="file-type">{label}</span>
                 </label>
               </>

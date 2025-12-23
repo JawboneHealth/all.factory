@@ -1,4 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { 
+  Camera, Hammer, Tag, Database, Settings, Plug, AlertTriangle, 
+  RefreshCw, MousePointer, GripHorizontal, ArrowUpDown, Search, Sparkles 
+} from 'lucide-react';
 import { type LogEvent, STATIONS } from '../types';
 
 interface Props {
@@ -6,14 +10,14 @@ interface Props {
 }
 
 const CATEGORIES = [
-  { key: 'Scan', label: 'Scan', color: '#10b981', icon: '📷' },
-  { key: 'Press', label: 'Press', color: '#f59e0b', icon: '🔨' },
-  { key: 'PSA', label: 'PSA', color: '#8b5cf6', icon: '🏷️' },
-  { key: 'Database', label: 'Database', color: '#3b82f6', icon: '💾' },
-  { key: 'System', label: 'System', color: '#6b7280', icon: '⚙️' },
-  { key: 'PLC', label: 'PLC', color: '#ec4899', icon: '🔌' },
-  { key: 'Error', label: 'Error', color: '#ef4444', icon: '⚠️' },
-  { key: 'Process', label: 'Process', color: '#06b6d4', icon: '🔄' },
+  { key: 'Scan', label: 'Scan', color: '#10b981', icon: <Camera size={14} /> },
+  { key: 'Press', label: 'Press', color: '#f59e0b', icon: <Hammer size={14} /> },
+  { key: 'PSA', label: 'PSA', color: '#8b5cf6', icon: <Tag size={14} /> },
+  { key: 'Database', label: 'Database', color: '#3b82f6', icon: <Database size={14} /> },
+  { key: 'System', label: 'System', color: '#6b7280', icon: <Settings size={14} /> },
+  { key: 'PLC', label: 'PLC', color: '#ec4899', icon: <Plug size={14} /> },
+  { key: 'Error', label: 'Error', color: '#ef4444', icon: <AlertTriangle size={14} /> },
+  { key: 'Process', label: 'Process', color: '#06b6d4', icon: <RefreshCw size={14} /> },
 ];
 
 // Full station names
@@ -233,57 +237,46 @@ export function EventTimelineView({ events }: Props) {
       });
       
       ctx.fillText(label, x, 32);
-      
-      // Tick mark
-      ctx.strokeStyle = COLORS.textDim;
-      ctx.beginPath();
-      ctx.moveTo(x, 42);
-      ctx.lineTo(x, TIME_AXIS_HEIGHT);
-      ctx.stroke();
     }
+  }, [viewState, activeStations, filteredEvents, timeRange, hoveredEvent]);
 
-  }, [viewState, filteredEvents, activeStations, timeRange, hoveredEvent]);
-
-  // Handle resize
+  // Resize canvas
   useEffect(() => {
     const resize = () => {
       const canvas = canvasRef.current;
       const container = containerRef.current;
-      if (canvas && container) {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = container.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        canvas.style.width = `${rect.width}px`;
-        canvas.style.height = `${rect.height}px`;
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.scale(dpr, dpr);
-        draw();
-      }
+      if (!canvas || !container) return;
+      
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      canvas.style.width = `${container.clientWidth}px`;
+      canvas.style.height = `${container.clientHeight}px`;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.scale(dpr, dpr);
+      
+      draw();
     };
+    
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, [draw]);
 
-  // Redraw on state change
   useEffect(() => {
     draw();
   }, [draw]);
 
   // Mouse handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     setDragStart({ x: e.clientX - viewState.offsetX, y: e.clientY - viewState.offsetY });
-  };
+  }, [viewState]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
 
     if (isDragging) {
       setViewState(prev => ({
@@ -294,41 +287,44 @@ export function EventTimelineView({ events }: Props) {
       return;
     }
 
-    // Find hovered event
+    // Hit detection for hover
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
     const { offsetX, offsetY, scale } = viewState;
-    const laneHeight = LANE_HEIGHT;
-    const laneMargin = LANE_MARGIN;
-    const eventRadius = Math.max(4, 6 * Math.min(scale, 2)) * 2;
-    const timeSpan = timeRange.max - timeRange.min;
+    const eventRadius = Math.max(4, 6 * Math.min(scale, 2));
 
     let found: LogEvent | null = null;
+    const timeSpan = timeRange.max - timeRange.min;
 
-    activeStations.forEach((station, laneIndex) => {
-      const laneY = offsetY + laneIndex * (laneHeight + laneMargin) + TIME_AXIS_HEIGHT;
-      const laneEvents = filteredEvents.filter(e => e.stationCode === station.code);
-
-      laneEvents.forEach(event => {
+    for (const station of activeStations) {
+      const laneIndex = activeStations.indexOf(station);
+      const laneY = offsetY + laneIndex * (LANE_HEIGHT + LANE_MARGIN) + TIME_AXIS_HEIGHT;
+      
+      const laneEvents = filteredEvents.filter(ev => ev.stationCode === station.code);
+      
+      for (const event of laneEvents) {
         const progress = (event.timeMs - timeRange.min) / timeSpan;
-        const ex = offsetX + progress * rect.width * scale;
-        const ey = laneY + laneHeight / 2;
-
-        const dist = Math.sqrt((x - ex) ** 2 + (y - ey) ** 2);
-        if (dist < eventRadius) {
+        const x = offsetX + progress * canvas.clientWidth * scale;
+        const y = laneY + LANE_HEIGHT / 2;
+        
+        const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
+        if (dist < eventRadius * 2) {
           found = event;
+          break;
         }
-      });
-    });
+      }
+      if (found) break;
+    }
 
     setHoveredEvent(found);
     setTooltipPos({ x: e.clientX, y: e.clientY });
-  };
+  }, [isDragging, dragStart, viewState, activeStations, filteredEvents, timeRange]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+  }, []);
 
-  // Scroll to zoom (up=in, down=out) + horizontal pan + shift for vertical
-  // Use native event listener with { passive: false } to allow preventDefault
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     
@@ -554,11 +550,11 @@ export function EventTimelineView({ events }: Props) {
 
       {/* Help hint */}
       <div className="timeline-hint">
-        <span>🖱️ Drag to pan</span>
-        <span>⚙️ Scroll horizontal</span>
-        <span>⇧ Shift+scroll vertical</span>
-        <span>🔍 Pinch/⌘+scroll zoom</span>
-        <span>✨ Hover for details</span>
+        <span><MousePointer size={14} /> Drag to pan</span>
+        <span><GripHorizontal size={14} /> Scroll horizontal</span>
+        <span><ArrowUpDown size={14} /> Shift+scroll vertical</span>
+        <span><Search size={14} /> Pinch/⌘+scroll zoom</span>
+        <span><Sparkles size={14} /> Hover for details</span>
       </div>
     </div>
   );

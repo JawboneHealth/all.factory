@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { Upload, Clock, Check, X } from 'lucide-react';
 
 interface Props {
   label: string;
@@ -39,27 +40,27 @@ export function FileUploader({ label, accept, onUpload, status, filename }: Prop
       <label htmlFor={inputId} className="file-label">
         {status === 'uploading' && (
           <>
-            <span className="upload-icon">⏳</span>
+            <span className="upload-icon"><Clock size={20} /></span>
             <span className="upload-text">Uploading...</span>
           </>
         )}
         {status === 'success' && (
           <>
-            <span className="upload-icon success">✓</span>
+            <span className="upload-icon success"><Check size={20} /></span>
             <span className="file-name">{filename}</span>
             <span className="upload-status">Uploaded</span>
           </>
         )}
         {status === 'error' && (
           <>
-            <span className="upload-icon">✕</span>
+            <span className="upload-icon"><X size={20} /></span>
             <span className="upload-text">Upload failed</span>
             <span className="upload-hint">Click to retry</span>
           </>
         )}
         {status === 'idle' && (
           <>
-            <span className="upload-icon">📄</span>
+            <span className="upload-icon"><Upload size={20} /></span>
             <span className="upload-text">{label}</span>
             <span className="upload-hint">Drop file or click to browse</span>
           </>

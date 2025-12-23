@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { 
+  Search, Waves, RefreshCw, Lightbulb, AlertCircle, AlertTriangle, 
+  CheckCircle, Info, ChevronDown, Clock, Sparkles, PartyPopper 
+} from 'lucide-react';
 
 interface CrossStationAnalysis {
   cascades: any[];
@@ -18,7 +22,7 @@ export function IssueAnalysisView({ analysis }: Props) {
   if (!analysis) {
     return (
       <div className="issue-empty">
-        <span className="empty-icon">🔍</span>
+        <span className="empty-icon"><Search size={48} /></span>
         <h3>No Cross-Station Analysis</h3>
         <p>Upload error logs from multiple stations to see patterns</p>
       </div>
@@ -29,10 +33,10 @@ export function IssueAnalysisView({ analysis }: Props) {
 
   const getInsightIcon = (level: string) => {
     switch (level) {
-      case 'critical': return '🚨';
-      case 'warning': return '⚠️';
-      case 'success': return '✅';
-      default: return 'ℹ️';
+      case 'critical': return <AlertCircle size={18} />;
+      case 'warning': return <AlertTriangle size={18} />;
+      case 'success': return <CheckCircle size={18} />;
+      default: return <Info size={18} />;
     }
   };
 
@@ -47,7 +51,7 @@ export function IssueAnalysisView({ analysis }: Props) {
       {/* Summary Cards */}
       <div className="issue-summary">
         <div className={`issue-card ${cascades.length > 0 ? 'has-issues' : 'clear'}`}>
-          <span className="issue-icon">🌊</span>
+          <span className="issue-icon"><Waves size={24} /></span>
           <div className="issue-data">
             <span className="issue-value">{cascades.length}</span>
             <span className="issue-label">Error Cascades</span>
@@ -56,7 +60,7 @@ export function IssueAnalysisView({ analysis }: Props) {
         </div>
         
         <div className={`issue-card ${recurring.length > 0 ? 'has-issues' : 'clear'}`}>
-          <span className="issue-icon">🔄</span>
+          <span className="issue-icon"><RefreshCw size={24} /></span>
           <div className="issue-data">
             <span className="issue-value">{recurring.length}</span>
             <span className="issue-label">Recurring Patterns</span>
@@ -65,7 +69,7 @@ export function IssueAnalysisView({ analysis }: Props) {
         </div>
         
         <div className="issue-card info">
-          <span className="issue-icon">💡</span>
+          <span className="issue-icon"><Lightbulb size={24} /></span>
           <div className="issue-data">
             <span className="issue-value">{insights.length}</span>
             <span className="issue-label">Insights</span>
@@ -79,21 +83,21 @@ export function IssueAnalysisView({ analysis }: Props) {
           className={`issue-tab ${activeTab === 'insights' ? 'active' : ''}`}
           onClick={() => setActiveTab('insights')}
         >
-          💡 Insights
+          <Lightbulb size={16} /> Insights
           <span className="tab-count">{insights.length}</span>
         </button>
         <button 
           className={`issue-tab ${activeTab === 'cascades' ? 'active' : ''}`}
           onClick={() => setActiveTab('cascades')}
         >
-          🌊 Cascades
+          <Waves size={16} /> Cascades
           <span className="tab-count">{cascades.length}</span>
         </button>
         <button 
           className={`issue-tab ${activeTab === 'recurring' ? 'active' : ''}`}
           onClick={() => setActiveTab('recurring')}
         >
-          🔄 Recurring
+          <RefreshCw size={16} /> Recurring
           <span className="tab-count">{recurring.length}</span>
         </button>
       </div>
@@ -105,7 +109,7 @@ export function IssueAnalysisView({ analysis }: Props) {
           <div className="insights-panel">
             {insights.length === 0 ? (
               <div className="all-clear">
-                <span className="clear-icon">🎉</span>
+                <span className="clear-icon"><PartyPopper size={48} /></span>
                 <h3>All Systems Healthy</h3>
                 <p>No significant cross-station issues detected</p>
               </div>
@@ -131,7 +135,7 @@ export function IssueAnalysisView({ analysis }: Props) {
           <div className="cascades-panel">
             {cascades.length === 0 ? (
               <div className="empty-tab">
-                <span>✨</span>
+                <span><Sparkles size={32} /></span>
                 <p>No error cascades detected</p>
               </div>
             ) : (
@@ -147,7 +151,7 @@ export function IssueAnalysisView({ analysis }: Props) {
                         className="cascade-header"
                         onClick={() => setExpandedCascade(isExpanded ? null : cascade.id)}
                       >
-                        <span className="cascade-time">⏱️ {cascade.startTime}</span>
+                        <span className="cascade-time"><Clock size={14} /> {cascade.startTime}</span>
                         <div className="cascade-stations">
                           {cascade.stations.map((s: string, i: number) => (
                             <span key={i} className="station-chip">{s}</span>
@@ -155,7 +159,9 @@ export function IssueAnalysisView({ analysis }: Props) {
                         </div>
                         <span className="cascade-count">{cascade.errors.length} errors</span>
                         <span className="cascade-window">within {cascade.windowSec}s</span>
-                        <span className={`expand-arrow ${isExpanded ? 'up' : ''}`}>▼</span>
+                        <span className={`expand-arrow ${isExpanded ? 'up' : ''}`}>
+                          <ChevronDown size={16} />
+                        </span>
                       </div>
                       
                       {isExpanded && (
@@ -188,7 +194,7 @@ export function IssueAnalysisView({ analysis }: Props) {
           <div className="recurring-panel">
             {recurring.length === 0 ? (
               <div className="empty-tab">
-                <span>✨</span>
+                <span><Sparkles size={32} /></span>
                 <p>No recurring patterns detected</p>
               </div>
             ) : (
@@ -228,7 +234,7 @@ export function IssueAnalysisView({ analysis }: Props) {
                     
                     {pattern.consistency >= 0.7 && (
                       <div className="systematic-alert">
-                        ⚠️ Likely systematic issue - investigate root cause
+                        <AlertTriangle size={14} /> Likely systematic issue - investigate root cause
                       </div>
                     )}
                   </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileText, Table, ScrollText, ChevronDown, ChevronRight, Check, X } from 'lucide-react';
 import { type Change } from '../types';
 
 interface Props {
@@ -123,7 +124,7 @@ function LogLine({ line, lineNumber, defaultExpanded = false }: {
         )}
         {isLong && (
           <button className="log-expand-btn" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-            {expanded ? '▼' : '▶'}
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
         )}
       </div>
@@ -143,7 +144,7 @@ export function EvidencePanel({ change, onApprove, onReject }: Props) {
         </div>
         <div className="evidence-panel empty">
           <div className="empty-state">
-            <span className="empty-icon">📄</span>
+            <span className="empty-icon"><FileText size={32} /></span>
             <p>Select a change to view details</p>
           </div>
         </div>
@@ -186,7 +187,7 @@ export function EvidencePanel({ change, onApprove, onReject }: Props) {
         {/* SQL Diff Table */}
         <div className="diff-section">
           <div className="section-header">
-            <span className="section-icon">📊</span>
+            <span className="section-icon"><Table size={16} /></span>
             <span className="section-title">
               {change.issue_type === 'ERROR_EVENT_MISMATCH' ? 'Error Event Data' : 'SQL Data Change'}
             </span>
@@ -302,7 +303,7 @@ export function EvidencePanel({ change, onApprove, onReject }: Props) {
         {/* MMI Evidence */}
         <div className="diff-section">
           <div className="section-header">
-            <span className="section-icon">📜</span>
+            <span className="section-icon"><ScrollText size={16} /></span>
             <span className="section-title">MMI Log Evidence</span>
             <span className="line-count">{mmiEvidence.length} lines</span>
           </div>
@@ -328,15 +329,15 @@ export function EvidencePanel({ change, onApprove, onReject }: Props) {
         {change.status === 'pending' ? (
           <div className="action-buttons">
             <button className="approve-button" onClick={onApprove}>
-              ✓ Approve Change
+              <Check size={16} /> Approve Change
             </button>
             <button className="reject-button" onClick={onReject}>
-              ✗ Reject
+              <X size={16} /> Reject
             </button>
           </div>
         ) : (
           <div className={`status-banner ${change.status}`}>
-            {change.status === 'approved' ? '✓ Change Approved' : '✗ Change Rejected'}
+            {change.status === 'approved' ? <><Check size={16} /> Change Approved</> : <><X size={16} /> Change Rejected</>}
           </div>
         )}
       </div>
