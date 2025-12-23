@@ -7,7 +7,7 @@ Each change has:
     - DUPLICATE_INSERT: Overlapped events (Battery #2)
     - MISSING_PSA_TAPE: Missing PSA tape picture path (Battery #1)
     - ORPHAN_ROW: Missing SN & PRS with PSA images (Battery #3)
-    - INDEX_MISMATCH: Mismatched PSA image indices (Battery #4)
+    - INDEX_MISMATCH: Mismatched PSA image indices - Camera 2 (Battery #4)
     - ERROR_EVENT_MISMATCH: SQL/MMI error event discrepancy (Battery #5)
     - REPEATED_INSERT: Same content logged multiple times (PCBA #1)
 - description: human readable description
@@ -56,8 +56,8 @@ def find_all_issues(
     # Issue #3: Orphan rows / missing SN & PRS (Battery #3)
     changes.extend(find_orphan_rows(mmi_events, sql_data))
     
-    # Issue #4: Index mismatch (Battery #4)
-    changes.extend(find_index_mismatches(mmi_events, sql_data))
+    # Issue #4: Camera 2 index mismatch (Battery #4) - UPDATED
+    changes.extend(find_cam2_index_mismatches(mmi_events, sql_data))
     
     # Issue #5: Error event mismatch between SQL and MMI (Battery #5)
     if sql_error_data:
@@ -225,65 +225,105 @@ def find_orphan_rows(mmi_events: list[dict], sql_data: list[dict]) -> list[dict]
     return changes
 
 
-def find_index_mismatches(mmi_events: list[dict], sql_data: list[dict]) -> list[dict]:
+def find_cam2_index_mismatches(mmi_events: list[dict], sql_data: list[dict]) -> list[dict]:
     """
-    Issue #4: Find rows where PSA image indices are mismatched.
+    Issue #4 (Battery #4): Find Camera 2 image index mismatches.
     
-    The POWER_BOARD_PSA_PIC and BATTERY_PSA_PIC should have sequential indices
-    from the same camera batch. Large gaps indicate a mismatch.
+    Camera 2 captures images in a specific sequence:
+    - Within a unit: PSA_image_index = SN_image_index + 6
+    - Between units: next_unit_SN_index = current_unit_SN_index + 6
+    
+    This detects when the indices don't follow this pattern, indicating
+    data was recorded for the wrong unit or images got misaligned.
     """
     changes = []
+    EXPECTED_GAP = 6  # The interval between SN image and PSA image should be +6
     
     for row in sql_data:
         row_id = row.get("ID")
+        timestamp = _extract_time(row.get("DATE"))
         
-        power_psa = row.get("POWER_BOARD_PSA_PIC") or ""
-        battery_psa = row.get("BATTERY_PSA_PIC") or ""
+        # Extract indices from image names
+        pb_sn_idx = _extract_image_index(row.get("POWER_BOARD_SN_PIC"))
+        pb_psa_idx = _extract_image_index(row.get("POWER_BOARD_PSA_PIC"))
+        bt_sn_idx = _extract_image_index(row.get("BATTERY_SN_PIC"))
+        bt_psa_idx = _extract_image_index(row.get("BATTERY_PSA_PIC"))
         
-        if power_psa and battery_psa:
-            # Extract indices from image names (e.g., "20251106_BaCAM2_0028" -> 28)
-            power_match = re.search(r"_(\d+)$", str(power_psa))
-            battery_match = re.search(r"_(\d+)$", str(battery_psa))
-            
-            if power_match and battery_match:
-                power_idx = int(power_match.group(1))
-                battery_idx = int(battery_match.group(1))
+        # Check Power Board: SN to PSA gap should be +6
+        if pb_sn_idx is not None and pb_psa_idx is not None:
+            pb_gap = pb_psa_idx - pb_sn_idx
+            if pb_gap != EXPECTED_GAP:
+                expected_idx = pb_sn_idx + EXPECTED_GAP
                 
-                # They should be close (within 5 or so)
-                gap = abs(power_idx - battery_idx)
+                # Find camera events in MMI for evidence
+                cam_events = _find_camera_events_near_time(mmi_events, timestamp)
                 
-                if gap > 10:
-                    timestamp = _extract_time(row.get("DATE"))
-                    
-                    # Find camera events in MMI for evidence
-                    cam_events = _find_camera_events_near_time(mmi_events, timestamp)
-                    
-                    # Try to determine the correct index
-                    # Usually BATTERY should be 1 more than POWER for same board
-                    expected_battery_idx = power_idx + 1
-                    expected_battery_psa = re.sub(r"_\d+$", f"_{expected_battery_idx:04d}", str(power_psa))
-                    
-                    sql_after = dict(row)
-                    sql_after["BATTERY_PSA_PIC"] = expected_battery_psa
-                    
-                    changes.append({
-                        "id": f"mismatch_{row_id}",
-                        "issue_type": "INDEX_MISMATCH",
-                        "description": f"Row {row_id}: POWER_PSA index ({power_idx}) vs BATTERY_PSA index ({battery_idx}) gap of {gap}",
-                        "timestamp": timestamp,
-                        "action": "UPDATE",
-                        "sql_row_id": row_id,
-                        "sql_before": _clean_row(row),
-                        "sql_after": _clean_row(sql_after),
-                        "power_index": power_idx,
-                        "battery_index": battery_idx,
-                        "suggested_battery_index": expected_battery_idx,
-                        "mmi_evidence": [e["raw"] for e in cam_events],
-                        "mmi_line_numbers": [e["line_number"] for e in cam_events],
-                        "status": "pending"
-                    })
+                sql_after = dict(row)
+                # Suggest the correct PSA image name
+                pb_sn_pic = row.get("POWER_BOARD_SN_PIC", "")
+                suggested_psa = re.sub(r"_\d+$", f"_{expected_idx:04d}", str(pb_sn_pic))
+                sql_after["POWER_BOARD_PSA_PIC"] = suggested_psa
+                
+                changes.append({
+                    "id": f"cam2_pb_mismatch_{row_id}",
+                    "issue_type": "INDEX_MISMATCH",
+                    "description": f"Row {row_id}: Power Board PSA index {pb_psa_idx} should be {expected_idx} (SN index={pb_sn_idx}, gap={pb_gap}, expected +{EXPECTED_GAP})",
+                    "timestamp": timestamp,
+                    "action": "UPDATE",
+                    "sql_row_id": row_id,
+                    "sql_before": _clean_row(row),
+                    "sql_after": _clean_row(sql_after),
+                    "field": "POWER_BOARD_PSA_PIC",
+                    "current_index": pb_psa_idx,
+                    "expected_index": expected_idx,
+                    "sn_index": pb_sn_idx,
+                    "gap": pb_gap,
+                    "mmi_evidence": [e["raw"] for e in cam_events[:5]],
+                    "mmi_line_numbers": [e["line_number"] for e in cam_events[:5]],
+                    "status": "pending"
+                })
+        
+        # Check Battery: SN to PSA gap should be +6
+        if bt_sn_idx is not None and bt_psa_idx is not None:
+            bt_gap = bt_psa_idx - bt_sn_idx
+            if bt_gap != EXPECTED_GAP:
+                expected_idx = bt_sn_idx + EXPECTED_GAP
+                
+                # Find camera events in MMI for evidence
+                cam_events = _find_camera_events_near_time(mmi_events, timestamp)
+                
+                sql_after = dict(row)
+                # Suggest the correct PSA image name
+                bt_sn_pic = row.get("BATTERY_SN_PIC", "")
+                suggested_psa = re.sub(r"_\d+$", f"_{expected_idx:04d}", str(bt_sn_pic))
+                sql_after["BATTERY_PSA_PIC"] = suggested_psa
+                
+                changes.append({
+                    "id": f"cam2_bt_mismatch_{row_id}",
+                    "issue_type": "INDEX_MISMATCH",
+                    "description": f"Row {row_id}: Battery PSA index {bt_psa_idx} should be {expected_idx} (SN index={bt_sn_idx}, gap={bt_gap}, expected +{EXPECTED_GAP})",
+                    "timestamp": timestamp,
+                    "action": "UPDATE",
+                    "sql_row_id": row_id,
+                    "sql_before": _clean_row(row),
+                    "sql_after": _clean_row(sql_after),
+                    "field": "BATTERY_PSA_PIC",
+                    "current_index": bt_psa_idx,
+                    "expected_index": expected_idx,
+                    "sn_index": bt_sn_idx,
+                    "gap": bt_gap,
+                    "mmi_evidence": [e["raw"] for e in cam_events[:5]],
+                    "mmi_line_numbers": [e["line_number"] for e in cam_events[:5]],
+                    "status": "pending"
+                })
     
     return changes
+
+
+# Keep the old function name as alias for backward compatibility
+def find_index_mismatches(mmi_events: list[dict], sql_data: list[dict]) -> list[dict]:
+    """Alias for find_cam2_index_mismatches for backward compatibility."""
+    return find_cam2_index_mismatches(mmi_events, sql_data)
 
 
 def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dict]) -> list[dict]:
@@ -295,9 +335,6 @@ def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dic
     - Clear time not updated in SQL
     - Event logged once in MMI but twice in SQL
     - Clear event missing in SQL
-    
-    This affects OEE (Overall Equipment Effectiveness) calculations since equipment
-    status is tracked via these error events for MTBF/MTBA metrics.
     """
     changes = []
     
@@ -308,9 +345,8 @@ def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dic
     mmi_error_map = {}
     for event in mmi_errors:
         timestamp = event["timestamp"]
-        # Try to extract error code from content
         error_code = _extract_error_code(event.get("content", ""))
-        key = f"{error_code}_{timestamp[:5]}"  # Group by error code and HH:MM
+        key = f"{error_code}_{timestamp[:5]}"
         if key not in mmi_error_map:
             mmi_error_map[key] = []
         mmi_error_map[key].append(event)
@@ -327,12 +363,10 @@ def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dic
         timestamp = _extract_time(set_time)
         key = f"{error_code}_{timestamp[:5]}" if timestamp else f"{error_code}_"
         
-        # Check for duplicate SQL entries (same error logged twice)
+        # Check for duplicate SQL entries
         dup_key = f"{error_code}_{timestamp}"
         if dup_key in sql_error_by_time:
             prev_row_id = sql_error_by_time[dup_key]
-            
-            # Find related MMI events
             related_mmi = mmi_error_map.get(key, [])
             
             changes.append({
@@ -357,7 +391,6 @@ def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dic
         mmi_matches = mmi_error_map.get(key, [])
         
         if not mmi_matches:
-            # Event in SQL but not in MMI
             changes.append({
                 "id": f"error_sql_only_{row_id}",
                 "issue_type": "ERROR_EVENT_MISMATCH",
@@ -375,7 +408,6 @@ def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dic
         
         # Check for missing clear time
         if set_time and (pd.isna(clear_time) or clear_time is None or clear_time == ""):
-            # Look for clear event in MMI near or after set time
             clear_events = _find_error_clear_events(mmi_events, error_code, timestamp)
             
             suggested_clear_time = None
@@ -402,60 +434,25 @@ def find_error_event_mismatches(mmi_events: list[dict], sql_error_data: list[dic
                 "status": "pending"
             })
     
-    # Check for errors in MMI but not in SQL
-    sql_error_codes = set()
-    for row in sql_error_data:
-        error_code = row.get("ERROR_CODE") or row.get("ALARM_CODE") or row.get("CODE")
-        set_time = row.get("SET_TIME") or row.get("START_TIME") or row.get("OCCUR_TIME")
-        timestamp = _extract_time(set_time)
-        sql_error_codes.add(f"{error_code}_{timestamp[:5]}" if timestamp else f"{error_code}_")
-    
-    for key, events in mmi_error_map.items():
-        if key not in sql_error_codes and events:
-            event = events[0]
-            error_code = key.split("_")[0]
-            
-            changes.append({
-                "id": f"error_mmi_only_{event['line_number']}",
-                "issue_type": "ERROR_EVENT_MISMATCH",
-                "description": f"Error {error_code} at {event['timestamp']} exists in MMI but not in SQL",
-                "timestamp": event["timestamp"],
-                "action": "FLAG",
-                "sql_row_id": None,
-                "sql_before": None,
-                "sql_after": None,
-                "mismatch_type": "MMI_ONLY",
-                "mmi_evidence": [e["raw"] for e in events[:5]],
-                "mmi_line_numbers": [e["line_number"] for e in events[:5]],
-                "status": "pending"
-            })
-    
     return changes
 
 
 def find_repeated_inserts(mmi_events: list[dict], sql_data: list[dict]) -> list[dict]:
     """
     Issue #6 (PCBA #1): Find identical content logged multiple times in rapid succession.
-    
-    This occurs when Bit 6101 is turned on before Motor & PCBA Barcode operation completes,
-    causing log events to fire indefinitely until the barcode operation finishes.
-    The same INSERT statement gets executed dozens of times.
     """
     changes = []
     
-    # Find all SQL INSERT events in MMI
     insert_events = [e for e in mmi_events if e["event_type"] == "SQL_INSERT"]
     
     if len(insert_events) < 2:
         return changes
     
-    # Group consecutive identical inserts
     i = 0
     while i < len(insert_events):
         current = insert_events[i]
         current_values = current["data"].get("values", "")
         
-        # Find all consecutive identical inserts
         group = [current]
         j = i + 1
         
@@ -463,7 +460,6 @@ def find_repeated_inserts(mmi_events: list[dict], sql_data: list[dict]) -> list[
             next_event = insert_events[j]
             next_values = next_event["data"].get("values", "")
             
-            # Check if same content and within short time window (e.g., 30 seconds)
             if next_values == current_values and _times_close(
                 current["timestamp"], 
                 next_event["timestamp"], 
@@ -474,9 +470,7 @@ def find_repeated_inserts(mmi_events: list[dict], sql_data: list[dict]) -> list[
             else:
                 break
         
-        # If we found 3+ identical inserts, flag as repeated
         if len(group) >= 3:
-            # Find corresponding SQL rows (if any)
             timestamp = current["timestamp"]
             affected_rows = []
             
@@ -485,9 +479,7 @@ def find_repeated_inserts(mmi_events: list[dict], sql_data: list[dict]) -> list[
                 if _times_close(row_time, timestamp, window_seconds=60):
                     affected_rows.append(row)
             
-            # First occurrence is valid, rest are duplicates to delete
             for k, event in enumerate(group[1:], start=1):
-                # Try to match to a SQL row
                 matched_row = None
                 if k < len(affected_rows):
                     matched_row = affected_rows[k]
@@ -506,15 +498,25 @@ def find_repeated_inserts(mmi_events: list[dict], sql_data: list[dict]) -> list[
                     "repeat_count": len(group),
                     "occurrence": k + 1,
                     "first_line_number": group[0]["line_number"],
-                    "mmi_evidence": [e["raw"] for e in group[:10]],  # Show first 10
+                    "mmi_evidence": [e["raw"] for e in group[:10]],
                     "mmi_line_numbers": [e["line_number"] for e in group[:10]],
                     "status": "pending"
                 })
         
-        # Move to next group
         i = j
     
     return changes
+
+
+# ============== Helper Functions ==============
+
+def _extract_image_index(img_name) -> Optional[int]:
+    """Extract the numeric index from an image filename like '20251217_BaCAM2_0005'"""
+    if pd.isna(img_name) or not img_name:
+        return None
+    match = re.search(r"_(\d+)$", str(img_name))
+    return int(match.group(1)) if match else None
+
 
 def _extract_time(date_value) -> str:
     """Extract time string from datetime value in HH:MM:SS format"""
@@ -522,7 +524,6 @@ def _extract_time(date_value) -> str:
         return ""
     if hasattr(date_value, 'strftime'):
         return date_value.strftime("%H:%M:%S")
-    # Try to parse from string
     s = str(date_value)
     if " " in s:
         return s.split(" ")[1].split(".")[0]
@@ -535,10 +536,8 @@ def _normalize_time(t: str) -> int:
     is_pm = "PM" in t
     is_am = "AM" in t
     
-    # Remove AM/PM
     t = t.replace("AM", "").replace("PM", "").strip()
     
-    # Split into parts
     parts = t.replace(".", ":").split(":")[:3]
     if len(parts) < 3:
         return 0
@@ -548,7 +547,6 @@ def _normalize_time(t: str) -> int:
         minute = int(parts[1])
         second = int(parts[2].split(".")[0]) if parts[2] else 0
         
-        # Handle 12-hour format
         if is_pm and hour != 12:
             hour += 12
         elif is_am and hour == 12:
@@ -610,23 +608,18 @@ def _extract_error_code(content: str) -> str:
     if not content:
         return ""
     
-    # Common patterns for error codes
-    # Pattern 1: ERROR_CODE=12345 or ERROR:12345
     match = re.search(r"ERROR[_:]?\s*(\d+)", content, re.IGNORECASE)
     if match:
         return match.group(1)
     
-    # Pattern 2: ALARM 12345 or Alarm: 12345
     match = re.search(r"ALARM[:\s]*(\d+)", content, re.IGNORECASE)
     if match:
         return match.group(1)
     
-    # Pattern 3: Code in brackets [12345]
     match = re.search(r"\[(\d{4,})\]", content)
     if match:
         return match.group(1)
     
-    # Pattern 4: Just a 4+ digit number at start after timestamp
     match = re.search(r"^\s*(\d{4,})", content)
     if match:
         return match.group(1)
@@ -643,14 +636,10 @@ def _find_error_clear_events(events: list[dict], error_code: str, after_timestam
         content = event.get("content", "").upper()
         event_secs = _normalize_time(event["timestamp"])
         
-        # Must be after the set time
         if event_secs <= after_secs:
             continue
         
-        # Look for clear/reset indicators
         is_clear = any(word in content for word in ["CLEAR", "RESET", "END", "RESOLVED", "OFF"])
-        
-        # Check if this error code is mentioned
         has_code = error_code in content if error_code else True
         
         if is_clear and has_code:
