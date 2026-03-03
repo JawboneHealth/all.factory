@@ -15,7 +15,23 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
-      '/analytics': {
+      '/analytics/upload': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/analytics/analyze': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/analytics/results': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/analytics/stations': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/analytics/reset': {
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
