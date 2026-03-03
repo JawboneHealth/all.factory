@@ -20,6 +20,7 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime
 from collections import defaultdict, Counter
 import re
+import time
 import statistics
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -28,8 +29,11 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 store: Dict[str, Any] = {
     "stations": {},  # station_code -> {barcode_content, error_content, sql_content}
     "analysis_results": None,
+    "analysis_cached_at": None,
     "start_time_filter": None,
 }
+
+CACHE_EXPIRY_SEC = 30 * 60  # 30 minutes
 
 # Station definitions
 STATIONS = {
@@ -639,6 +643,7 @@ def run_analysis(start_time: Optional[str] = None):
         'serial_analyses': serial_analyses,
         'all_events': all_events,
     }
+    store["analysis_cached_at"] = time.time()
     
     return store["analysis_results"]
 
@@ -666,6 +671,7 @@ def reset_analytics():
     """Clear all uploaded data and analysis results."""
     store["stations"] = {}
     store["analysis_results"] = None
+    store["analysis_cached_at"] = None
     store["start_time_filter"] = None
     return {"status": "reset"}
 
@@ -674,5 +680,54 @@ def reset_analytics():
 def get_results():
     """Get cached analysis results."""
     if store["analysis_results"] is None:
-        raise HTTPException(status_code=404, detail="No analysis results available. Run /analyze first.")
+        return {}
+    # Check expiry
+    if store["analysis_cached_at"] and (time.time() - store["analysis_cached_at"]) > CACHE_EXPIRY_SEC:
+        store["analysis_results"] = None
+        store["analysis_cached_at"] = None
+        return {}
     return store["analysis_results"]
+
+
+@router.get("/results/status")
+def get_results_status():
+    """Get cache status info for the frontend."""
+    if store["analysis_results"] is None or store["analysis_cached_at"] is None:
+        return {"exists": False}
+
+    age_sec = time.time() - store["analysis_cached_at"]
+    remaining_sec = max(0, CACHE_EXPIRY_SEC - age_sec)
+
+    if remaining_sec <= 0:
+        store["analysis_results"] = None
+        store["analysis_cached_at"] = None
+        return {"exists": False, "expired": True}
+
+    def fmt(sec):
+        m = int(sec // 60)
+        s = int(sec % 60)
+        return f"{m}m {s}s" if m > 0 else f"{s}s"
+
+    return {
+        "exists": True,
+        "expired": False,
+        "age": int(age_sec * 1000),
+        "ageStr": fmt(age_sec),
+        "remaining": int(remaining_sec * 1000),
+        "remainingStr": fmt(remaining_sec),
+        "stations": list(store["stations"].keys()),
+        "fileCount": sum(
+            (1 if d.get("barcode_content") else 0)
+            + (1 if d.get("error_content") else 0)
+            + (1 if d.get("sql_content") else 0)
+            for d in store["stations"].values()
+        ),
+    }
+
+
+@router.delete("/results/cache")
+def clear_results_cache():
+    """Clear cached results without clearing uploaded files."""
+    store["analysis_results"] = None
+    store["analysis_cached_at"] = None
+    return {"status": "cleared"}
