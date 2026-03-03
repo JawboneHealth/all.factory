@@ -5,7 +5,7 @@ import { IssueList } from '../components/IssueList';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { type Change } from '../types';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8001';
 
 export function DataCleanup() {
   const [mmiStatus, setMmiStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
