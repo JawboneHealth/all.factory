@@ -3797,6 +3797,12 @@
   padding-bottom: 0.625rem;
   margin-bottom: 2px;
 }
+
+.export-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0.25rem 0.5rem;
+}
 /* ============================================
    ANALYTICS HEADER - Option C Breadcrumb Style
    ============================================ */

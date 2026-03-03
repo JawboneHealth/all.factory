@@ -379,6 +379,17 @@ export function ProductAnalytics() {
               <div className="export-dropdown">
                 <button onClick={() => {
                   downloadHtml(generateDashboardHtml(state.stationAnalyses), 'dashboard-report.html');
+                  downloadHtml(generateErrorTimelineHtml(state.stationAnalyses), 'error-timeline.html');
+                  downloadHtml(generateEventTimelineHtml(state.allEvents), 'event-timeline.html');
+                  downloadHtml(generateCrossStationHtml(state.crossStationAnalysis), 'cross-station-issues.html');
+                  downloadHtml(generateSerialHtml(state.serialAnalyses), 'serial-analysis.html');
+                  setShowExportMenu(false);
+                }}>
+                  📁 All Reports
+                </button>
+                <div className="export-divider" />
+                <button onClick={() => {
+                  downloadHtml(generateDashboardHtml(state.stationAnalyses), 'dashboard-report.html');
                   setShowExportMenu(false);
                 }}>
                   📊 Dashboard
