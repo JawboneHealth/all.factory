@@ -21,7 +21,7 @@ import {
 } from '../utils/cache';
 import './ProductAnalytics.css';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8001';
 
 export function ProductAnalytics() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('dashboard');
@@ -114,7 +114,7 @@ export function ProductAnalytics() {
     try {
       // Upload all files
       const uploadPromises: Promise<Response>[] = [];
-      const uploadedFiles: string[] = [];
+      const uploadedFiles: Record<string, string[]> = {};
       const stations: string[] = [];
       
       for (const [stationCode, files] of Object.entries(state.stationFiles)) {
@@ -128,7 +128,7 @@ export function ProductAnalytics() {
           uploadPromises.push(
             fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData })
           );
-          uploadedFiles.push(`${stationCode}_barcode`);
+          (uploadedFiles[stationCode] ??= []).push('barcode');
         }
         if (files.errorLog) {
           const formData = new FormData();
@@ -138,7 +138,7 @@ export function ProductAnalytics() {
           uploadPromises.push(
             fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData })
           );
-          uploadedFiles.push(`${stationCode}_error`);
+          (uploadedFiles[stationCode] ??= []).push('error');
         }
         if (files.sqlExport) {
           const formData = new FormData();
@@ -148,7 +148,7 @@ export function ProductAnalytics() {
           uploadPromises.push(
             fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData })
           );
-          uploadedFiles.push(`${stationCode}_sql`);
+          (uploadedFiles[stationCode] ??= []).push('sql');
         }
       }
 
@@ -335,7 +335,7 @@ export function ProductAnalytics() {
             <div className="cache-indicator">
               <span className="cache-icon">💾</span>
               <span className="cache-text">
-                Cached • {cacheInfo.remainingFormatted} remaining
+                Cached • {cacheInfo.remainingStr} remaining
               </span>
             </div>
           )}
