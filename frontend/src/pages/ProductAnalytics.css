@@ -3549,3 +3549,574 @@
   
   .analytics-content { padding: 1rem; }
 }
+/* ============================================
+   ANALYTICS HEADER - Option C Breadcrumb Style
+   ============================================ */
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.analytics-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.analytics-header .header-left h1 {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.analytics-header .header-sep {
+  color: var(--border-strong);
+  font-size: 0.875rem;
+  user-select: none;
+}
+
+.analytics-header .analysis-info {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.analytics-header .cache-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.analytics-header .cache-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  display: inline-block;
+}
+
+.analytics-header .cache-text {
+  font-size: 0.6875rem;
+  color: var(--accent-success);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .reset-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.analytics-header .reset-button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+/* ============================================
+   ANALYTICS HEADER - Option C Breadcrumb Style
+   ============================================ */
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.analytics-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.analytics-header .header-left h1 {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.analytics-header .header-sep {
+  color: var(--border-strong);
+  font-size: 0.875rem;
+  user-select: none;
+}
+
+.analytics-header .analysis-info {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.analytics-header .cache-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.analytics-header .cache-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  display: inline-block;
+}
+
+.analytics-header .cache-text {
+  font-size: 0.6875rem;
+  color: var(--accent-success);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .reset-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.analytics-header .reset-button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Export Dropdown */
+.export-dropdown-wrapper {
+  position: relative;
+}
+
+.analytics-header .export-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--accent-primary-dim);
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  color: var(--accent-primary);
+}
+
+.analytics-header .export-button:hover {
+  background: rgba(8, 145, 178, 0.15);
+}
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.export-dropdown button:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.export-dropdown button:first-child {
+  color: var(--accent-primary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding-bottom: 0.625rem;
+  margin-bottom: 2px;
+}
+/* ============================================
+   ANALYTICS HEADER - Option C Breadcrumb Style
+   ============================================ */
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.analytics-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.analytics-header .header-left h1 {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.analytics-header .header-sep {
+  color: var(--border-strong);
+  font-size: 0.875rem;
+  user-select: none;
+}
+
+.analytics-header .analysis-info {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.analytics-header .cache-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.analytics-header .cache-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  display: inline-block;
+}
+
+.analytics-header .cache-text {
+  font-size: 0.6875rem;
+  color: var(--accent-success);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .reset-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.analytics-header .reset-button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Export Dropdown */
+.export-dropdown-wrapper {
+  position: relative;
+}
+
+.analytics-header .export-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--accent-primary-dim);
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  color: var(--accent-primary);
+}
+
+.analytics-header .export-button:hover {
+  background: rgba(8, 145, 178, 0.15);
+}
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.export-dropdown button:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.export-dropdown button.coming-soon {
+  color: var(--text-dim);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.export-dropdown button.coming-soon:hover {
+  background: none;
+  color: var(--text-dim);
+}
+
+.export-dropdown .soon-badge {
+  margin-left: auto;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.375rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+}
+/* ============================================
+   ANALYTICS HEADER - Option C Breadcrumb Style
+   ============================================ */
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.analytics-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.analytics-header .header-left h1 {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.analytics-header .header-sep {
+  color: var(--border-strong);
+  font-size: 0.875rem;
+  user-select: none;
+}
+
+.analytics-header .analysis-info {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.analytics-header .cache-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.analytics-header .cache-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  display: inline-block;
+}
+
+.analytics-header .cache-text {
+  font-size: 0.6875rem;
+  color: var(--accent-success);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-header .reset-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.analytics-header .reset-button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Export Dropdown */
+.export-dropdown-wrapper {
+  position: relative;
+}
+
+.analytics-header .export-button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--accent-primary-dim);
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  color: var(--accent-primary);
+}
+
+.analytics-header .export-button:hover {
+  background: rgba(8, 145, 178, 0.15);
+}
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.export-dropdown button:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}

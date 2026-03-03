@@ -19,6 +19,7 @@ import {
   getAnalyticsCacheInfo,
   clearAnalyticsCache,
 } from '../utils/cache';
+import { generateDashboardHtml, generateErrorTimelineHtml, generateEventTimelineHtml, generateCrossStationHtml, generateSerialHtml, downloadHtml } from '../utils/exportHtml';
 import './ProductAnalytics.css';
 
 const API_BASE = 'http://localhost:8001';
@@ -36,32 +37,47 @@ export function ProductAnalytics() {
   });
   
   const [timeFilter, setTimeFilter] = useState<string>('');
-  const [cacheInfo, setCacheInfo] = useState<ReturnType<typeof getAnalyticsCacheInfo>>(null);
+  const [cacheInfo, setCacheInfo] = useState<Awaited<ReturnType<typeof getAnalyticsCacheInfo>>>(null);
+  const [checkingCache, setCheckingCache] = useState(true);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Check for cached data on mount
   useEffect(() => {
-    if (hasValidAnalyticsCache()) {
-      const cached = getCachedAnalyticsData();
-      if (cached) {
-        setState(prev => ({
-          ...prev,
-          analysisComplete: true,
-          stationAnalyses: cached.stationAnalyses || [],
-          crossStationAnalysis: cached.crossStationAnalysis || null,
-          serialAnalyses: cached.serialAnalyses || [],
-          allEvents: cached.allEvents || [],
-        }));
-        setCacheInfo(getAnalyticsCacheInfo());
+    let cancelled = false;
+
+    async function checkCache() {
+      try {
+        const valid = await hasValidAnalyticsCache();
+        if (!valid || cancelled) return;
+
+        const cached = await getCachedAnalyticsData();
+        if (cached && !cancelled) {
+          setState(prev => ({
+            ...prev,
+            analysisComplete: true,
+            stationAnalyses: cached.stationAnalyses || [],
+            crossStationAnalysis: cached.crossStationAnalysis || null,
+            serialAnalyses: cached.serialAnalyses || [],
+            allEvents: cached.allEvents || [],
+          }));
+          const info = await getAnalyticsCacheInfo();
+          if (!cancelled) setCacheInfo(info);
+        }
+      } finally {
+        if (!cancelled) setCheckingCache(false);
       }
     }
+
+    checkCache();
+    return () => { cancelled = true; };
   }, []);
 
   // Update cache info periodically
   useEffect(() => {
     if (!state.analysisComplete) return;
     
-    const interval = setInterval(() => {
-      const info = getAnalyticsCacheInfo();
+    const interval = setInterval(async () => {
+      const info = await getAnalyticsCacheInfo();
       setCacheInfo(info);
       
       // If cache expired, reset state
@@ -183,7 +199,7 @@ export function ProductAnalytics() {
         ...newState,
       }));
       
-      setCacheInfo(getAnalyticsCacheInfo());
+      setCacheInfo(await getAnalyticsCacheInfo());
     } catch (error) {
       console.error('Analysis failed:', error);
       setState(prev => ({ ...prev, isAnalyzing: false }));
@@ -211,6 +227,15 @@ export function ProductAnalytics() {
     const f = state.stationFiles[key];
     return f.barcodeLog || f.errorLog || f.sqlExport;
   });
+
+  // Wait for cache check before rendering
+  if (checkingCache) {
+    return (
+      <div className="analytics-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <span className="spinner" />
+      </div>
+    );
+  }
 
   // Landing / Upload view
   if (!state.analysisComplete) {
@@ -325,22 +350,68 @@ export function ProductAnalytics() {
       <div className="analytics-header">
         <div className="header-left">
           <h1>Production Analytics</h1>
+          <span className="header-sep">/</span>
           <span className="analysis-info">
-            {state.stationAnalyses.length} stations • {state.allEvents.length.toLocaleString()} events
+            {state.stationAnalyses.length} stations
+          </span>
+          <span className="header-sep">/</span>
+          <span className="analysis-info">
+            {state.allEvents.length.toLocaleString()} events
           </span>
         </div>
         <div className="header-actions">
-          {/* Cache indicator */}
           {cacheInfo && (
             <div className="cache-indicator">
-              <span className="cache-icon">💾</span>
+              <span className="cache-dot" />
               <span className="cache-text">
-                Cached • {cacheInfo.remainingStr} remaining
+                {cacheInfo.remainingStr}
               </span>
             </div>
           )}
+          <div className="export-dropdown-wrapper">
+            <button
+              className="export-button"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+            >
+              ↓ Export
+            </button>
+            {showExportMenu && (
+              <div className="export-dropdown">
+                <button onClick={() => {
+                  downloadHtml(generateDashboardHtml(state.stationAnalyses), 'dashboard-report.html');
+                  setShowExportMenu(false);
+                }}>
+                  📊 Dashboard
+                </button>
+                <button onClick={() => {
+                  downloadHtml(generateErrorTimelineHtml(state.stationAnalyses), 'error-timeline.html');
+                  setShowExportMenu(false);
+                }}>
+                  ⚠️ Error Timeline
+                </button>
+                <button onClick={() => {
+                  downloadHtml(generateEventTimelineHtml(state.allEvents), 'event-timeline.html');
+                  setShowExportMenu(false);
+                }}>
+                  📈 Event Timeline
+                </button>
+                <button onClick={() => {
+                  downloadHtml(generateCrossStationHtml(state.crossStationAnalysis), 'cross-station-issues.html');
+                  setShowExportMenu(false);
+                }}>
+                  🔗 Cross-Station Issues
+                </button>
+                <button onClick={() => {
+                  downloadHtml(generateSerialHtml(state.serialAnalyses), 'serial-analysis.html');
+                  setShowExportMenu(false);
+                }}>
+                  # Serial Analysis
+                </button>
+              </div>
+            )}
+          </div>
           <button className="reset-button" onClick={reset}>
-            ← New Analysis
+            ← New
           </button>
         </div>
       </div>
