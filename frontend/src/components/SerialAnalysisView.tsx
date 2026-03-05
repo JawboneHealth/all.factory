@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, Package, Clock, TrendingUp, OctagonX, Pause, 
-  Play, BarChart2, LineChart 
+  Play, BarChart2, LineChart, Zap, Timer
 } from 'lucide-react';
 import { type SerialAnalysis, STATIONS } from '../types';
 
@@ -46,13 +46,13 @@ export function SerialAnalysisView({ analyses }: Props) {
     };
   }, [currentAnalysis]);
 
-  const getGapColor = (gap: number, isStoppage: boolean, isBuffer: boolean) => {
+  const getGapColor = (_gap: number, isStoppage: boolean, isBuffer: boolean) => {
     if (isStoppage) return '#ef4444';
     if (isBuffer) return '#f59e0b';
     return '#10b981';
   };
 
-  const getGapStatus = (gap: number, isStoppage: boolean, isBuffer: boolean) => {
+  const getGapStatus = (_gap: number, isStoppage: boolean, isBuffer: boolean) => {
     if (isStoppage) return 'Stoppage';
     if (isBuffer) return 'Buffer';
     return 'Normal';
@@ -108,6 +108,28 @@ export function SerialAnalysisView({ analyses }: Props) {
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.totalUnits || 0}</span>
                 <span className="stat-label">Total Units</span>
+              </div>
+            </div>
+
+            <div className="stat-card primary">
+              <span className="stat-icon"><Zap size={20} /></span>
+              <div className="stat-data">
+                <span className="stat-value">
+                  {currentAnalysis.stats?.overallUph != null ? currentAnalysis.stats.overallUph : '—'}
+                </span>
+                <span className="stat-label">Overall UPH</span>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <span className="stat-icon"><Timer size={20} /></span>
+              <div className="stat-data">
+                <span className="stat-value">
+                  {currentAnalysis.stats?.avgNormalCycleTime != null
+                    ? <>{currentAnalysis.stats.avgNormalCycleTime}<small>s</small></>
+                    : '—'}
+                </span>
+                <span className="stat-label">Avg Normal Cycle</span>
               </div>
             </div>
             
