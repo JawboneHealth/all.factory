@@ -216,6 +216,8 @@ export interface SerialAnalysis {
     stoppages: number;
     bufferClears: number;
     totalStoppageTime: number;
+    overallUph: number | null;
+    avgNormalCycleTime: number | null;
   };
 }
 
