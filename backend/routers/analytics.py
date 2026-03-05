@@ -147,12 +147,20 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
                 event_type = 'DB_Record'
                 category = 'Database'
         elif station_code == 'FV':
-            if 'SN' in content_part or 'Serial' in content_part:
+            # FVT barcode log has a leading comma before each data line: ,+1,0,SN,...
+            # After splitting on ']', content_part = ",+1,0,T0624..."
+            # so fields = ['', '+1', '0', 'SN', ...] — SN is at fields[3]
+            if '+1,0,' in content_part:
                 event_type = 'SN_Scan'
                 category = 'Scan'
+                if len(fields) > 3 and fields[3].startswith('T'):
+                    sn = fields[3]
             elif 'PASS' in content_part or 'FAIL' in content_part:
                 event_type = 'Test_Result'
                 category = 'Process'
+            elif 'PLC DM' in content_part:
+                event_type = 'PLC_DM'
+                category = 'System'
         
         # Track serial numbers
         if sn and sn not in seen_sns:
@@ -520,6 +528,17 @@ def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str
                     })
             run_start = i
     
+    # Overall UPH: total units / total elapsed time from first to last scan
+    overall_uph = None
+    if len(units) >= 2:
+        total_elapsed_sec = (units[-1]['timeMs'] - units[0]['timeMs']) / 1000
+        if total_elapsed_sec > 0:
+            overall_uph = round(len(units) / total_elapsed_sec * 3600, 1)
+
+    # Average Normal Cycle Time: mean of gaps that are not stoppages (< 60s)
+    normal_gaps = [u['gap'] for u in units[1:] if 0 < u['gap'] < 60]
+    avg_normal_cycle_time = round(statistics.mean(normal_gaps), 1) if normal_gaps else None
+
     return {
         'station': {
             'code': station_code,
@@ -538,6 +557,8 @@ def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str
             'stoppages': len([u for u in units if u['isStoppage']]),
             'bufferClears': len([u for u in units if u['isBuffer']]),
             'totalStoppageTime': sum(u['gap'] for u in units if u['isStoppage']),
+            'overallUph': overall_uph,
+            'avgNormalCycleTime': avg_normal_cycle_time,
         },
     }
 
@@ -608,12 +629,16 @@ def run_analysis(start_time: Optional[str] = None):
                 station_code,
                 start_filter
             )
-            all_events.extend(barcode_result.get('events', []))
-            
-            # Run serial analysis
-            serial = analyze_serial(barcode_result, station_code)
-            if serial:
-                serial_analyses.append(serial)
+            # Only treat as real data if we got actual scan/db events
+            # (prevents MMI-START-only files from generating phantom records)
+            if barcode_result.get('totalEvents', 0) <= 1 and barcode_result.get('scanEvents', 0) == 0:
+                barcode_result = None
+            else:
+                all_events.extend(barcode_result.get('events', []))
+                # Run serial analysis
+                serial = analyze_serial(barcode_result, station_code)
+                if serial:
+                    serial_analyses.append(serial)
         
         # Parse error log if available
         if station_data.get('error_content'):
