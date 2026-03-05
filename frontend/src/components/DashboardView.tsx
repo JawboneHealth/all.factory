@@ -85,8 +85,15 @@ function InfoTooltip({ metric }: { metric: string }) {
 export function DashboardView({ analyses }: Props) {
   const [expandedStation, setExpandedStation] = useState<string | null>(null);
 
+  // Sort analyses by the canonical station order defined in STATIONS
+  const sortedAnalyses = [...analyses].sort((a, b) => {
+    const aIdx = STATIONS.findIndex(s => s.code === a.station.code);
+    const bIdx = STATIONS.findIndex(s => s.code === b.station.code);
+    return aIdx - bIdx;
+  });
+
   // Calculate totals
-  const totals = useMemo(() => analyses.reduce(
+  const totals = useMemo(() => sortedAnalyses.reduce(
     (acc, a) => ({
       units: acc.units + (a.barcode?.completedUnits || 0),
       errors: acc.errors + (a.errors?.totalErrors || 0),
@@ -96,11 +103,11 @@ export function DashboardView({ analyses }: Props) {
   ), [analyses]);
 
   // Find bottleneck (highest cycle time)
-  const bottleneck = useMemo(() => analyses.reduce((worst, a) => {
+  const bottleneck = useMemo(() => sortedAnalyses.reduce((worst, a) => {
     const ct = a.barcode?.cycleTimeMedian || 0;
     const worstCt = worst?.barcode?.cycleTimeMedian || 0;
     return ct > worstCt ? a : worst;
-  }, analyses[0]), [analyses]);
+  }, sortedAnalyses[0]), [sortedAnalyses]);
 
   const getHealthStatus = (analysis: StationAnalysis) => {
     const errors = analysis.errors?.totalErrors || 0;
@@ -182,7 +189,7 @@ export function DashboardView({ analyses }: Props) {
 
       {/* Station Cards */}
       <div className="stations-grid">
-        {analyses.map((analysis) => {
+        {sortedAnalyses.map((analysis) => {
           const health = getHealthStatus(analysis);
           const color = getStationColor(analysis.station.code);
           const isExpanded = expandedStation === analysis.station.code;
