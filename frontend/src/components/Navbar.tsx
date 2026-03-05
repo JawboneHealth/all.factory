@@ -21,7 +21,7 @@ export function Navbar() {
         </div>
       </div>
       <div className="nav-right">
-        <span className="nav-version">v1.0</span>
+        <span className="nav-version">v1.2</span>
       </div>
     </nav>
   );
