@@ -2506,3 +2506,30 @@ export function downloadHtml(html: string, filename: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// IR-003: Save As — uses the File System Access API where available,
+// falling back to the standard download trigger.
+export async function saveAsHtml(html: string, suggestedFilename: string): Promise<void> {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+
+  // Modern browsers: show native Save As dialog
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: suggestedFilename,
+        types: [{ description: 'HTML Report', accept: { 'text/html': ['.html'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err: any) {
+      // User cancelled — do nothing
+      if (err?.name === 'AbortError') return;
+      // Any other error: fall through to standard download
+    }
+  }
+
+  // Fallback: standard anchor-click download
+  downloadHtml(html, suggestedFilename);
+}
