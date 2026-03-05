@@ -136,26 +136,26 @@ export function DataCleanup() {
           <span className="hero-badge">Factory Tools Suite</span>
           <h1>Data Cleanup</h1>
           <p className="hero-subtitle">
-            Analyze, clean, and validate manufacturing data from MMI logs and SQL databases.
+            Analyze, clean, and validate Battery station manufacturing data from MMI logs and SQL exports.
           </p>
         </section>
 
         {/* Upload Section */}
         <div className="upload-section">
           <p className="upload-intro">
-            Upload your MMI log and SQL export to begin analysis.
+            Upload your Battery station MMI barcode log and Battery SQL export to begin analysis.
           </p>
           <div className="upload-grid">
             <FileUploader
-              label="MMI Log File"
+              label="Battery MMI Barcode Log"
               accept=".log,.txt"
               onUpload={uploadMMI}
               status={mmiStatus}
               filename={mmiFilename}
             />
             <FileUploader
-              label="SQL Export (Excel)"
-              accept=".xlsx,.xls"
+              label="Battery SQL File"
+              accept=".xlsx,.xls,.csv"
               onUpload={uploadSQL}
               status={sqlStatus}
               filename={sqlFilename}
@@ -177,7 +177,7 @@ export function DataCleanup() {
             <div className="step-card">
               <div className="step-number">01</div>
               <h3>Upload Files</h3>
-              <p>Upload your MMI log file and SQL export (Excel) to begin analysis.</p>
+              <p>Upload your Battery station MMI barcode log and Battery SQL export (Excel or CSV).</p>
             </div>
             <div className="step-card">
               <div className="step-number">02</div>
