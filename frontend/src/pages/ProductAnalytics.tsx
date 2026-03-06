@@ -128,6 +128,10 @@ export function ProductAnalytics() {
     setState(prev => ({ ...prev, isAnalyzing: true }));
 
     try {
+      // Always reset backend station store before uploading new files
+      // This prevents old station data from bleeding into new analyses
+      await fetch(`${API_BASE}/analytics/reset`, { method: 'POST' });
+
       // Upload all files
       const uploadPromises: Promise<Response>[] = [];
       const uploadedFiles: Record<string, string[]> = {};
@@ -207,8 +211,9 @@ export function ProductAnalytics() {
   }, [state.stationFiles, timeFilter]);
 
   const reset = useCallback(() => {
-    // Clear cache when resetting
+    // Clear cache and backend station store when resetting
     clearAnalyticsCache();
+    fetch(`${API_BASE}/analytics/reset`, { method: 'POST' });
     
     setState({
       stationFiles: {},
