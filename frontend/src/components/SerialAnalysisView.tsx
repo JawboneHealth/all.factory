@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart3, Package, Clock, TrendingUp, OctagonX, Pause, 
   Play, BarChart2, LineChart, Zap, Timer
@@ -13,6 +13,16 @@ export function SerialAnalysisView({ analyses }: Props) {
   const [selectedStation, setSelectedStation] = useState<string>(analyses[0]?.station?.code || '');
   const [viewMode, setViewMode] = useState<'gaps' | 'runs'>('gaps');
   const [hoveredUnit, setHoveredUnit] = useState<number | null>(null);
+  const [showAllUnits, setShowAllUnits] = useState(false);
+
+  // Sync selected station when analyses list changes (e.g. after re-upload)
+  useEffect(() => {
+    const codes = analyses.map(a => a.station?.code);
+    if (!codes.includes(selectedStation)) {
+      setSelectedStation(analyses[0]?.station?.code || '');
+    }
+    setShowAllUnits(false);
+  }, [analyses]);
 
   const currentAnalysis = useMemo(() => 
     analyses.find(a => a.station?.code === selectedStation),
@@ -23,13 +33,15 @@ export function SerialAnalysisView({ analyses }: Props) {
     if (!currentAnalysis?.units) return null;
     
     const units = currentAnalysis.units;
-    const gaps = units.slice(1).map(u => u.gap).filter(g => g > 0 && g < 300); // Filter outliers
+    const allGaps = units.slice(1).map(u => u.gap).filter(g => g > 0);
     
-    if (gaps.length === 0) return null;
+    if (allGaps.length === 0) return null;
     
-    // Calculate nice max value for Y axis
-    const maxGap = Math.max(...gaps);
-    const niceMax = Math.ceil(maxGap / 10) * 10; // Round up to nearest 10
+    // Scale Y axis to the 95th percentile to avoid stoppages crushing normal bars,
+    // but track actual max so tooltip is always accurate
+    const sorted = [...allGaps].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1];
+    const niceMax = Math.ceil(p95 / 10) * 10;
     
     // Generate Y axis ticks
     const yTicks: number[] = [];
@@ -39,7 +51,7 @@ export function SerialAnalysisView({ analyses }: Props) {
     }
     
     return {
-      units: units.slice(0, 200), // Limit to 200 for performance
+      units: units.slice(0, 200),
       maxGap: niceMax,
       yTicks: yTicks.reverse(),
       totalUnits: units.length,
@@ -227,6 +239,7 @@ export function SerialAnalysisView({ analyses }: Props) {
                   <div className="bars">
                     {chartData.units.slice(1).map((unit, idx) => {
                       const color = getGapColor(unit.gap, unit.isStoppage, unit.isBuffer);
+                      const isCapped = unit.gap > chartData.maxGap;
                       const heightPct = Math.min((unit.gap / chartData.maxGap) * 100, 100);
                       const isHovered = hoveredUnit === idx;
                       
@@ -242,6 +255,9 @@ export function SerialAnalysisView({ analyses }: Props) {
                             style={{
                               height: `${heightPct}%`,
                               backgroundColor: color,
+                              backgroundImage: isCapped
+                                ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px)'
+                                : undefined,
                             }}
                           />
                           
@@ -400,7 +416,7 @@ export function SerialAnalysisView({ analyses }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentAnalysis.units?.slice(0, 50).map((unit, i) => (
+                  {(showAllUnits ? currentAnalysis.units : currentAnalysis.units?.slice(0, 50))?.map((unit, i) => (
                     <tr key={i} className={unit.isStoppage ? 'stoppage-row' : unit.isBuffer ? 'buffer-row' : ''}>
                       <td className="num-col">{unit.n}</td>
                       <td className="time-col">{unit.time}</td>
@@ -423,8 +439,10 @@ export function SerialAnalysisView({ analyses }: Props) {
                 </tbody>
               </table>
               {(currentAnalysis.units?.length || 0) > 50 && (
-                <div className="table-more">
-                  + {(currentAnalysis.units?.length || 0) - 50} more units
+                <div className="table-more" onClick={() => setShowAllUnits(v => !v)} style={{ cursor: 'pointer' }}>
+                  {showAllUnits
+                    ? '▲ Show less'
+                    : `+ ${(currentAnalysis.units?.length || 0) - 50} more units — click to show all`}
                 </div>
               )}
             </div>
