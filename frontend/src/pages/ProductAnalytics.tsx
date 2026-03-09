@@ -22,7 +22,7 @@ import {
 import { generateDashboardHtml, generateErrorTimelineHtml, generateEventTimelineHtml, generateCrossStationHtml, generateSerialHtml, downloadHtml } from '../utils/exportHtml';
 import './ProductAnalytics.css';
 
-const API_BASE = 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
 
 export function ProductAnalytics() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('dashboard');
