@@ -957,20 +957,16 @@
 }
 
 .info-tooltip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 220px;
+  width: 260px;
   padding: 0.75rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 100;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
   font-size: 0.75rem;
   text-align: left;
   pointer-events: none;
+  white-space: normal;
 }
 
 .info-tooltip::after {
@@ -980,28 +976,31 @@
   left: 50%;
   transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: var(--border-default);
+  border-top-color: #e5e7eb;
 }
 
-.info-tooltip strong {
-  display: block;
+.info-tooltip-title {
   font-size: 0.8125rem;
+  font-weight: 700;
+  color: #111827;
   margin-bottom: 0.375rem;
-  color: var(--text-primary);
 }
 
-.info-tooltip p {
-  margin: 0;
-  color: var(--text-secondary);
+.info-tooltip-formula {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: #0891b2;
+  background: #f0f9ff;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  margin-bottom: 0.5rem;
   line-height: 1.4;
 }
 
-.info-tooltip .info-unit {
-  display: block;
-  margin-top: 0.5rem;
+.info-tooltip-note {
   font-size: 0.6875rem;
-  color: var(--text-dim);
-  font-style: italic;
+  color: #6b7280;
+  line-height: 1.5;
 }
 
 /* Cycle Time Label */
@@ -4420,39 +4419,6 @@
 .card-header-right {
   text-align: right;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-}
-
-.card-units-count {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-.card-units-count strong {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.card-units-dash {
-  color: var(--text-dim);
-}
-.card-clean {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent-success);
-}
-.card-errors-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-danger);
-  display: flex;
-  align-items: center;
-  gap: 3px;
 }
 
 .card-unit-count {
