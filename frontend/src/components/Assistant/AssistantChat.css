@@ -306,19 +306,23 @@
 
 /* ── Markdown inside bot bubble ───────────────────────────────── */
 .assistant-msg.bot .msg-bubble p {
-  margin: 0 0 6px 0;
+  margin: 0;
+  line-height: 1.5;
+}
+.assistant-msg.bot .msg-bubble p + p {
+  margin-top: 4px;
 }
 .assistant-msg.bot .msg-bubble p:last-child {
   margin-bottom: 0;
 }
 .assistant-msg.bot .msg-bubble ul,
 .assistant-msg.bot .msg-bubble ol {
-  margin: 4px 0 6px 0;
-  padding-left: 18px;
+  margin: 2px 0 2px 0;
+  padding-left: 16px;
 }
 .assistant-msg.bot .msg-bubble li {
-  margin-bottom: 3px;
-  line-height: 1.5;
+  margin-bottom: 1px;
+  line-height: 1.45;
 }
 .assistant-msg.bot .msg-bubble strong {
   color: var(--text-primary);

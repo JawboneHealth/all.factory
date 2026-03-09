@@ -1,0 +1,316 @@
+.report-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.report-modal {
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.report-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+  letter-spacing: 0.01em;
+}
+
+.report-close {
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.report-close:hover {
+  color: var(--text-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* ── Body ── */
+.report-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #64748b);
+  margin-bottom: -4px;
+}
+
+.report-input,
+.report-textarea {
+  width: 100%;
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.report-input:focus,
+.report-textarea:focus {
+  outline: none;
+  border-color: var(--accent, #818cf8);
+}
+
+.report-input::placeholder,
+.report-textarea::placeholder {
+  color: var(--text-muted, #64748b);
+}
+
+/* ── Drop zone ── */
+.report-dropzone {
+  border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.report-dropzone:hover,
+.report-dropzone.has-files {
+  border-color: var(--accent, #818cf8);
+  background: rgba(129, 140, 248, 0.05);
+  color: var(--text-secondary, #94a3b8);
+}
+
+.report-file-hint {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  margin: -4px 0 0;
+}
+
+/* ── File list ── */
+.report-file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.file-name {
+  flex: 1;
+  color: var(--text-secondary, #94a3b8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  color: var(--text-muted, #64748b);
+  flex-shrink: 0;
+}
+
+.file-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.file-remove:hover {
+  color: #ef4444;
+}
+
+/* ── Error banner ── */
+.report-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #f87171;
+}
+
+/* ── Footer ── */
+.report-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.report-page-tag {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  flex: 1;
+}
+
+.report-btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent, #818cf8);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  font-family: inherit;
+}
+
+.report-btn-primary:hover:not(:disabled) {
+  background: #6366f1;
+}
+
+.report-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Success state ── */
+.report-success {
+  padding: 36px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.success-icon {
+  color: #34d399;
+}
+
+.success-heading {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+  margin: 0;
+}
+
+.success-sub {
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+  margin: 0;
+}
+
+.success-link {
+  font-size: 13px;
+  color: var(--accent, #818cf8);
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+
+.success-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Navbar report button — add to your existing nav CSS ── */
+.nav-report-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+
+.nav-report-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* ── Spinner ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+.nav-report-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+
+.nav-report-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+}
