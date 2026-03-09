@@ -18,7 +18,26 @@ def list_analyses(db: Session = Depends(get_db)):
         Analysis.starred.desc(),
         Analysis.updated_at.desc()
     ).all()
-    return [a.to_dict() for a in analyses]
+    results = []
+    for a in analyses:
+        d = a.to_dict()
+        # Include lightweight station summary for card display
+        if a.result:
+            station_analyses = a.result.get("station_analyses", [])
+            d["result"] = {
+                "station_analyses": [
+                    {
+                        "station": s.get("station"),
+                        "stationCode": s.get("stationCode"),
+                        "barcode": {"completedUnits": (s.get("barcode") or {}).get("completedUnits", 0)},
+                        "sql": {"rowCount": (s.get("sql") or {}).get("rowCount")} if s.get("sql") else None,
+                        "errors": {"totalErrors": (s.get("errors") or {}).get("totalErrors", 0)},
+                    }
+                    for s in station_analyses
+                ]
+            }
+        results.append(d)
+    return results
 
 
 # ── Get a single analysis with full result ────────────────────────────────────
@@ -41,12 +60,9 @@ class SaveAnalysisRequest(BaseModel):
 @router.post("/")
 def save_analysis(req: SaveAnalysisRequest, db: Session = Depends(get_db)):
     # Extract summary stats from result
-    station_analyses = req.result.get("station_analyses", [])
-    total_units  = sum(
-        (s.get("sql") or {}).get("rowCount") or (s.get("barcode") or {}).get("completedUnits") or 0
-        for s in station_analyses
-    )
-    total_errors = sum((s.get("errors") or {}).get("totalErrors", 0) for s in station_analyses)
+    station_analyses = req.result.get("stationAnalyses", [])
+    total_units  = sum(s.get("barcode", {}).get("completedUnits", 0) for s in station_analyses if s.get("barcode"))
+    total_errors = sum(s.get("errors", {}).get("totalErrors", 0) for s in station_analyses if s.get("errors"))
 
     # Auto-generate name if not provided
     name = req.name
