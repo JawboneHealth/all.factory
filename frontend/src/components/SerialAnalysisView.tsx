@@ -1,12 +1,101 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   BarChart3, Package, Clock, TrendingUp, OctagonX, Pause, 
-  Play, BarChart2, LineChart, Zap, Timer
+  Play, BarChart2, LineChart, Zap, Timer, Info
 } from 'lucide-react';
 import { type SerialAnalysis, STATIONS } from '../types';
 
 interface Props {
   analyses: SerialAnalysis[];
+}
+
+interface MetricInfo { title: string; formula: string; note: string; }
+
+const SERIAL_METRIC_INFO: Record<string, MetricInfo> = {
+  totalUnits: {
+    title: 'Total Units',
+    formula: 'count(completion signals) after dedup',
+    note: 'BS: DM[6101] pulses. BA/LA: INSERT INTO ÷ 2 (paired writes). TO: unique INSERT timestamps.',
+  },
+  overallUph: {
+    title: 'Overall UPH',
+    formula: 'totalUnits ÷ session_duration_hours',
+    note: 'Session = first to last unit. Includes stoppages, so this is a conservative throughput figure.',
+  },
+  avgNormalCycle: {
+    title: 'Avg Normal Cycle',
+    formula: 'mean(gaps where gap < 30s)',
+    note: 'Average of gaps classified as normal. Excludes buffer and stoppage gaps to show true machine speed.',
+  },
+  medianGap: {
+    title: 'Median Gap',
+    formula: 'median(t[n+1] − t[n]) across all consecutive units',
+    note: 'Middle value of all unit-to-unit gaps. Robust to outliers — stoppages don\'t skew this.',
+  },
+  meanGap: {
+    title: 'Mean Gap',
+    formula: 'mean(t[n+1] − t[n]) across all consecutive units',
+    note: 'Average gap including stoppages. Will be higher than median when there are long interruptions.',
+  },
+  stoppages: {
+    title: 'Stoppages',
+    formula: 'count(gaps > 60s)',
+    note: 'Any gap exceeding 60 seconds between consecutive units is classified as a stoppage.',
+  },
+  stoppageTime: {
+    title: 'Stoppage Time',
+    formula: 'sum(gap − normal_cycle) for each gap > 60s',
+    note: 'Total time lost to stoppages, approximated as excess gap time beyond a normal cycle.',
+  },
+  productionRuns: {
+    title: 'Production Runs',
+    formula: 'count(continuous sequences separated by stoppages)',
+    note: 'Each uninterrupted stretch of production between stoppages counts as one run.',
+  },
+};
+
+function InfoTooltip({ metric }: { metric: string }) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const info = SERIAL_METRIC_INFO[metric];
+
+  const handleEnter = useCallback(() => {
+    if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect());
+  }, []);
+
+  if (!info) return null;
+
+  const tooltip = rect && createPortal(
+    <div
+      className="info-tooltip"
+      style={{
+        position: 'fixed',
+        left: rect.left + rect.width / 2,
+        top: rect.top - 10,
+        transform: 'translateX(-50%) translateY(-100%)',
+        zIndex: 99999,
+      }}
+    >
+      <div className="info-tooltip-title">{info.title}</div>
+      <div className="info-tooltip-formula">{info.formula}</div>
+      <div className="info-tooltip-note">{info.note}</div>
+    </div>,
+    document.body
+  );
+
+  return (
+    <span
+      ref={triggerRef}
+      className="info-tooltip-trigger"
+      onMouseEnter={handleEnter}
+      onMouseLeave={() => setRect(null)}
+      onClick={(e) => { e.stopPropagation(); if (rect) setRect(null); else handleEnter(); }}
+    >
+      <span className="info-icon"><Info size={12} /></span>
+      {tooltip}
+    </span>
+  );
 }
 
 export function SerialAnalysisView({ analyses }: Props) {
@@ -119,7 +208,7 @@ export function SerialAnalysisView({ analyses }: Props) {
               <span className="stat-icon"><Package size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.totalUnits || 0}</span>
-                <span className="stat-label">Total Units</span>
+                <span className="stat-label">Total Units <InfoTooltip metric="totalUnits" /></span>
               </div>
             </div>
 
@@ -129,7 +218,7 @@ export function SerialAnalysisView({ analyses }: Props) {
                 <span className="stat-value">
                   {currentAnalysis.stats?.overallUph != null ? currentAnalysis.stats.overallUph : '—'}
                 </span>
-                <span className="stat-label">Overall UPH</span>
+                <span className="stat-label">Overall UPH <InfoTooltip metric="overallUph" /></span>
               </div>
             </div>
 
@@ -141,7 +230,7 @@ export function SerialAnalysisView({ analyses }: Props) {
                     ? <>{currentAnalysis.stats.avgNormalCycleTime}<small>s</small></>
                     : '—'}
                 </span>
-                <span className="stat-label">Avg Normal Cycle</span>
+                <span className="stat-label">Avg Normal Cycle <InfoTooltip metric="avgNormalCycle" /></span>
               </div>
             </div>
             
@@ -149,7 +238,7 @@ export function SerialAnalysisView({ analyses }: Props) {
               <span className="stat-icon"><Clock size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.medianGap?.toFixed(1) || 0}<small>s</small></span>
-                <span className="stat-label">Median Gap</span>
+                <span className="stat-label">Median Gap <InfoTooltip metric="medianGap" /></span>
               </div>
             </div>
             
@@ -157,7 +246,7 @@ export function SerialAnalysisView({ analyses }: Props) {
               <span className="stat-icon"><TrendingUp size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.meanGap?.toFixed(1) || 0}<small>s</small></span>
-                <span className="stat-label">Mean Gap</span>
+                <span className="stat-label">Mean Gap <InfoTooltip metric="meanGap" /></span>
               </div>
             </div>
             
@@ -165,7 +254,7 @@ export function SerialAnalysisView({ analyses }: Props) {
               <span className="stat-icon"><OctagonX size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.stats?.stoppages || 0}</span>
-                <span className="stat-label">Stoppages</span>
+                <span className="stat-label">Stoppages <InfoTooltip metric="stoppages" /></span>
               </div>
             </div>
             
@@ -173,7 +262,7 @@ export function SerialAnalysisView({ analyses }: Props) {
               <span className="stat-icon"><Pause size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{formatDuration(currentAnalysis.stats?.totalStoppageTime || 0)}</span>
-                <span className="stat-label">Stoppage Time</span>
+                <span className="stat-label">Stoppage Time <InfoTooltip metric="stoppageTime" /></span>
               </div>
             </div>
             
@@ -181,7 +270,7 @@ export function SerialAnalysisView({ analyses }: Props) {
               <span className="stat-icon"><Play size={20} /></span>
               <div className="stat-data">
                 <span className="stat-value">{currentAnalysis.runs?.length || 0}</span>
-                <span className="stat-label">Production Runs</span>
+                <span className="stat-label">Production Runs <InfoTooltip metric="productionRuns" /></span>
               </div>
             </div>
           </div>

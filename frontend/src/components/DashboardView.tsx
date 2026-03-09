@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Package, Factory, AlertTriangle, Clock, Flame, Info, 
   BarChart3, Wrench, TrendingUp, ChevronDown, ChevronRight, 
@@ -13,71 +14,112 @@ interface Props {
 // Tooltip/explanation content for metrics
 interface MetricInfo {
   title: string;
-  description: string;
-  unit?: string;
+  formula: string;
+  note: string;
 }
 
 const METRIC_INFO: Record<string, MetricInfo> = {
   cycleTime: {
     title: 'Median Cycle Time',
-    description: 'The typical time between completing one unit and the next. Lower is better. Median ignores outliers like stoppages.',
-    unit: 'seconds',
+    formula: 'median(t[n+1] − t[n]) across all unit completions',
+    note: 'Uses median to ignore stoppage outliers. Timestamps come from INSERT INTO or DM[6101] signals.',
   },
   cycleTimeMean: {
     title: 'Mean Cycle Time',
-    description: 'Average time between units. Can be skewed by stoppages or unusually long cycles.',
-    unit: 'seconds',
+    formula: 'mean(t[n+1] − t[n]) across all unit completions',
+    note: 'Can be skewed high by long stoppages. Use median for typical throughput.',
   },
   cycleTimeMax: {
-    title: 'Maximum Cycle Time',
-    description: 'Longest gap between units. High values typically indicate stoppages or errors.',
-    unit: 'seconds',
+    title: 'Max Cycle Time',
+    formula: 'max(t[n+1] − t[n]) across all unit completions',
+    note: 'Longest gap between any two consecutive units. Usually reflects a stoppage or error recovery.',
   },
   units: {
     title: 'Completed Units',
-    description: 'Total units successfully processed at this station during the analysis period.',
+    formula: 'count(completion signals) — deduplicated per station',
+    note: 'BS: DM[6101] PLC pulses. BA & LA: INSERT INTO ÷ 2 (paired writes). TO: unique INSERT timestamps.',
   },
   scans: {
     title: 'Barcode Scans',
-    description: 'Total barcode scan events logged. May include rescans and duplicates.',
+    formula: 'count(all scan lines in barcode log)',
+    note: 'Raw count — includes retries and re-scans. Higher than units when vision errors force rescans.',
   },
   errors: {
     title: 'Error Count',
-    description: 'Total error events logged. Includes alarms, faults, and warnings that may have caused stoppages.',
+    formula: 'count([OCCURED] lines in error log)',
+    note: 'Each [OCCURED] tag = one error event. CLEARED and MCREADY lines are excluded.',
   },
   downtime: {
     title: 'Downtime',
-    description: 'Total time the station was stopped due to errors. Calculated from error start to clear times.',
-    unit: 'minutes',
+    formula: 'sum(CLEARED_time − OCCURED_time) for each error pair',
+    note: 'Accumulated from matched OCCURED→CLEARED pairs. Unmatched errors (no CLEARED) are excluded.',
   },
   mtbf: {
     title: 'Mean Time Between Failures',
-    description: 'Average operating time between error events. Higher values indicate more reliable operation.',
-    unit: 'minutes',
+    formula: 'total_operating_time ÷ failure_count',
+    note: 'Operating time = total session minus downtime. Higher = more reliable station.',
+  },
+  dbInserts: {
+    title: 'DB Inserts',
+    formula: 'count(INSERT INTO lines in barcode log)',
+    note: 'Raw SQL insert count. BA and LA write 2 inserts per unit by design — divide by 2 for true unit count.',
+  },
+  snScans: {
+    title: 'SN Scans',
+    formula: 'count(lines matching serial number pattern)',
+    note: 'BS: M16...B motor SNs. BA: F491... power board SNs. TO/LA/FVT: T0624... top shell SNs.',
+  },
+  snDuplicates: {
+    title: 'SN Duplicates',
+    formula: 'count(serial numbers scanned more than once)',
+    note: 'Units scanned multiple times — caused by vision errors, retries, or operator re-scans.',
+  },
+  totalEvents: {
+    title: 'Total Events',
+    formula: 'count(all non-empty lines in barcode log)',
+    note: 'Includes scans, PLC signals, SQL inserts, system messages — everything logged by the MMI.',
   },
 };
 
 function InfoTooltip({ metric }: { metric: string }) {
-  const [show, setShow] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
   const info = METRIC_INFO[metric];
-  
+
+  const handleEnter = useCallback(() => {
+    if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect());
+  }, []);
+
   if (!info) return null;
-  
+
+  const tooltip = rect && createPortal(
+    <div
+      className="info-tooltip"
+      style={{
+        position: 'fixed',
+        left: rect.left + rect.width / 2,
+        top: rect.top - 10,
+        transform: 'translateX(-50%) translateY(-100%)',
+        zIndex: 99999,
+      }}
+    >
+      <div className="info-tooltip-title">{info.title}</div>
+      <div className="info-tooltip-formula">{info.formula}</div>
+      <div className="info-tooltip-note">{info.note}</div>
+    </div>,
+    document.body
+  );
+
   return (
-    <span 
+    <span
+      ref={triggerRef}
       className="info-tooltip-trigger"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-      onClick={(e) => { e.stopPropagation(); setShow(!show); }}
+      onMouseEnter={handleEnter}
+      onMouseLeave={() => setRect(null)}
+      onClick={(e) => { e.stopPropagation(); if (rect) setRect(null); else handleEnter(); }}
     >
       <span className="info-icon"><Info size={12} /></span>
-      {show && (
-        <div className="info-tooltip">
-          <strong>{info.title}</strong>
-          <p>{info.description}</p>
-          {info.unit && <span className="info-unit">Unit: {info.unit}</span>}
-        </div>
-      )}
+      {tooltip}
     </span>
   );
 }
@@ -258,19 +300,19 @@ export function DashboardView({ analyses }: Props) {
                   <div className="metrics-row">
                     <div className="metric">
                       <span className="metric-value">{analysis.barcode.completedUnits}</span>
-                      <span className="metric-label">Units</span>
+                      <span className="metric-label">Units <InfoTooltip metric="units" /></span>
                     </div>
                     <div className="metric">
                       <span className="metric-value">{analysis.barcode.scanEvents}</span>
-                      <span className="metric-label">Scans</span>
+                      <span className="metric-label">Scans <InfoTooltip metric="scans" /></span>
                     </div>
                     <div className={`metric ${(analysis.errors?.totalErrors || 0) > 10 ? 'warning' : ''}`}>
                       <span className="metric-value">{analysis.errors?.totalErrors || 0}</span>
-                      <span className="metric-label">Errors</span>
+                      <span className="metric-label">Errors <InfoTooltip metric="errors" /></span>
                     </div>
                     <div className="metric">
                       <span className="metric-value">{(analysis.errors?.totalDowntimeMin || 0).toFixed(1)}</span>
-                      <span className="metric-label">Down (min)</span>
+                      <span className="metric-label">Down (min) <InfoTooltip metric="downtime" /></span>
                     </div>
                   </div>
 
@@ -290,19 +332,19 @@ export function DashboardView({ analyses }: Props) {
                             <span className="detail-value">{analysis.barcode.lastEvent || '—'}</span>
                           </div>
                           <div className="detail-item">
-                            <span className="detail-label">Total Events</span>
+                            <span className="detail-label">Total Events <InfoTooltip metric="totalEvents" /></span>
                             <span className="detail-value">{analysis.barcode.totalEvents?.toLocaleString() || '—'}</span>
                           </div>
                           <div className="detail-item">
-                            <span className="detail-label">DB Inserts</span>
+                            <span className="detail-label">DB Inserts <InfoTooltip metric="dbInserts" /></span>
                             <span className="detail-value">{analysis.barcode.dbEvents?.toLocaleString() || '—'}</span>
                           </div>
                           <div className="detail-item">
-                            <span className="detail-label">SN Scans</span>
+                            <span className="detail-label">SN Scans <InfoTooltip metric="snScans" /></span>
                             <span className="detail-value">{analysis.barcode.snScans || 0}</span>
                           </div>
                           <div className="detail-item">
-                            <span className="detail-label">SN Duplicates</span>
+                            <span className="detail-label">SN Duplicates <InfoTooltip metric="snDuplicates" /></span>
                             <span className="detail-value">{analysis.barcode.snDuplicates || 0}</span>
                           </div>
                           <div className="detail-item">
@@ -451,7 +493,7 @@ export function DashboardView({ analyses }: Props) {
                       {/* MTBF - Single line */}
                       {analysis.errors?.mtbf && (
                         <div className="mini-mtbf">
-                          <span className="mtbf-label">MTBF</span>
+                          <span className="mtbf-label">MTBF <InfoTooltip metric="mtbf" /></span>
                           <span className="mtbf-value">{analysis.errors.mtbf.minutes.toFixed(1)} min</span>
                           <span className="mtbf-note">({analysis.errors.mtbf.count} failures)</span>
                         </div>
