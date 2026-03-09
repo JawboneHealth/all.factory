@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: allfactory-backend
     ports:
-      - "8002:8000"
+      - "8003:8000"
     restart: unless-stopped
 
   frontend:
@@ -13,7 +13,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_BASE=http://10.1.11.250:8002
+        - VITE_API_BASE=http://10.1.11.250:8003
     container_name: allfactory-frontend
     ports:
       - "3002:3000"
