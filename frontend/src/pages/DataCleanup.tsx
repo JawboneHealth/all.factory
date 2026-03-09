@@ -1,8 +1,9 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { FileUploader } from '../components/FileUploader';
 import { StatsBar } from '../components/StatsBar';
 import { IssueList } from '../components/IssueList';
 import { EvidencePanel } from '../components/EvidencePanel';
+import { useAssistantContext } from '../components/Assistant/AssistantContext';
 import { type Change } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
@@ -127,6 +128,17 @@ export function DataCleanup() {
   }, []);
 
   const canAnalyze = mmiStatus === 'success' && sqlStatus === 'success';
+  const { mergeContext } = useAssistantContext();
+
+  useEffect(() => {
+    mergeContext({
+      mmi_uploaded: mmiStatus === 'success',
+      sql_uploaded: sqlStatus === 'success',
+      analyzed,
+      total_changes: changes.length,
+      pending_changes: byStatus.pending,
+    });
+  }, [mmiStatus, sqlStatus, analyzed, changes.length, byStatus.pending]);
 
   if (!analyzed) {
     return (

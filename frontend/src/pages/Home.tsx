@@ -1,6 +1,10 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAssistantContext } from '../components/Assistant/AssistantContext';
 
 export function Home() {
+  const { setContext } = useAssistantContext();
+  useEffect(() => { setContext({}); }, []);
   return (
     <div className="home-page">
       <section className="hero-section">
