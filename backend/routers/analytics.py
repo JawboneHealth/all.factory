@@ -22,6 +22,8 @@ from collections import defaultdict, Counter
 import re
 import time
 import statistics
+import csv
+import io
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -37,17 +39,32 @@ CACHE_EXPIRY_SEC = 30 * 60  # 30 minutes
 
 # Station definitions
 STATIONS = {
-    'BS': {'name': 'Bottom Shell', 'icon': '📦', 'color': '#818cf8', 'multiUp': 3},
-    'BA': {'name': 'Battery', 'icon': '🔋', 'color': '#34d399'},
-    'TR': {'name': 'Trans', 'icon': '🔄', 'color': '#f472b6'},
-    'TO': {'name': 'Top Shell', 'icon': '🔝', 'color': '#fbbf24'},
-    'LA': {'name': 'Laser', 'icon': '⚡', 'color': '#ef4444'},
-    'FV': {'name': 'FVT', 'icon': '🧪', 'color': '#06b6d4'},
+    'BS': {'name': 'Bottom Shell', 'icon': '📦', 'color': '#818cf8', 'multiUp': 3, 'normalCycleSec': 30},
+    'BA': {'name': 'Battery',      'icon': '🔋', 'color': '#34d399', 'normalCycleSec': 40},
+    'TR': {'name': 'Trans',        'icon': '🔄', 'color': '#f472b6', 'normalCycleSec': 30},
+    'TO': {'name': 'Top Shell',    'icon': '🔝', 'color': '#fbbf24', 'normalCycleSec': 45},
+    'LA': {'name': 'Laser',        'icon': '⚡', 'color': '#ef4444', 'normalCycleSec': 55},
+    'FV': {'name': 'FVT',          'icon': '🧪', 'color': '#06b6d4', 'normalCycleSec': 120},
 }
 
 
-def parse_timestamp(ts_str: str, log_date: str = "2025-12-17") -> Optional[datetime]:
+def extract_log_date(content: str) -> str:
+    """Extract date from log content. Looks for YYYY,MM,DD or YYYYMMDD patterns."""
+    # Pattern: 2026,02,24 (barcode logs embed date in SN data)
+    m = re.search(r'(\d{4}),(\d{2}),(\d{2})', content[:2000])
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    # Pattern: 20260224 (compact date in filenames/content)
+    m = re.search(r'(20\d{2})(\d{2})(\d{2})', content[:2000])
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def parse_timestamp(ts_str: str, log_date: str = "") -> Optional[datetime]:
     """Parse timestamp string like '9:45:18 AM' or '09:45:18' (24h) into datetime."""
+    if not log_date:
+        log_date = datetime.now().strftime("%Y-%m-%d")
     try:
         ts_str = ts_str.strip()
         if 'AM' not in ts_str and 'PM' not in ts_str:
@@ -61,8 +78,23 @@ def parse_timestamp(ts_str: str, log_date: str = "2025-12-17") -> Optional[datet
 
 def parse_barcode_log(content: str, station_code: str, start_filter: Optional[datetime] = None) -> Dict[str, Any]:
     """Parse barcode log and extract events and metrics."""
-    lines = content.split('\n')
+    log_date = extract_log_date(content)
+    lines = content.replace('\r\n', '\n').replace('\r', '\n').split('\n')
     ts_pattern = re.compile(r'^\[(\d{1,2}:\d{2}:\d{2} [AP]M)\](.*)')
+
+    # For BS: pre-build a set of line indices where 6101 fires,
+    # and map each to the motor SN within the next few lines for deduplication.
+    bs_6101_sn: dict[int, str] = {}
+    if station_code == 'BS':
+        for i, line in enumerate(lines):
+            if 'PLC DM[6101]' in line:
+                sn = None
+                for j in range(i + 1, min(i + 6, len(lines))):
+                    sn_match = re.search(r'PLC DM\[6100\]-\d+_([A-Z0-9]+B)', lines[j])
+                    if sn_match:
+                        sn = sn_match.group(1)
+                        break
+                bs_6101_sn[i] = sn if sn else f'unknown_{i}'
     
     events = []
     all_timestamps = []
@@ -70,14 +102,17 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
     seen_sns = set()
     sn_counts = defaultdict(int)
     hourly_activity = defaultdict(int)
-    
-    for line_num, line in enumerate(lines, 1):
+    db_inserts = set()          # deduplicate DB records by unit identity
+    completion_timestamps = []  # timestamp of each unique unit completion, in order
+
+    for line_idx, line in enumerate(lines):
+        line_num = line_idx + 1
         match = ts_pattern.match(line.strip())
         if not match:
             continue
         
         ts_str, content_part = match.groups()
-        ts = parse_timestamp(ts_str)
+        ts = parse_timestamp(ts_str, log_date)
         if not ts:
             continue
         
@@ -86,7 +121,6 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
         
         all_timestamps.append(ts)
         hour = ts.strftime('%H')
-        hourly_activity[hour] += 1
         
         # Classify event
         is_error = False
@@ -113,7 +147,7 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             elif content_part.startswith('+3,'):
                 event_type = 'Component_SN'
                 category = 'Scan'
-            elif re.match(r'^\d+:', content_part):
+            elif 'PLC DM[6101]' in content_part:
                 event_type = 'DB_Record'
                 category = 'Database'
         elif station_code == 'BA':
@@ -134,16 +168,19 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             elif content_part.startswith('+6,'):
                 event_type = 'Battery_PSA'
                 category = 'PSA'
-            elif re.match(r'^\d+:', content_part):
+            elif 'insert into' in content_part.lower() or re.match(r'^\d+:', content_part):
                 event_type = 'DB_Record'
                 category = 'Database'
         elif station_code in ['TR', 'TO', 'LA']:
-            if '+1,0,' in content_part or '+3,0,' in content_part:
+            if '+3,0,' in content_part:
                 event_type = 'SN_Scan'
                 category = 'Scan'
                 if len(fields) > 2:
                     sn = fields[2]
-            elif re.match(r'^\d+:', content_part):
+            elif '+1,0,' in content_part or '+4,0,' in content_part:
+                event_type = 'Component_Scan'
+                category = 'Scan'
+            elif 'insert into' in content_part.lower() or re.match(r'^\d+:', content_part):
                 event_type = 'DB_Record'
                 category = 'Database'
         elif station_code == 'FV':
@@ -168,6 +205,22 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             sn_timestamps.append(ts)
         if sn:
             sn_counts[sn] += 1
+
+        # Deduplicate DB_Records by unit identity
+        if event_type == 'DB_Record':
+            if 'insert into' in content_part.lower():
+                # Dedup by SN extracted from INSERT VALUES (3rd field)
+                sn_match = re.search(r"VALUES\s*\([^,]+,[^,]+,'?([^,']+)'?", content_part, re.IGNORECASE)
+                db_key = sn_match.group(1).strip("'\" ") if sn_match else content_part.strip()
+            elif station_code == 'BS' and line_idx in bs_6101_sn:
+                # Dedup by motor SN from the line following 6101
+                db_key = bs_6101_sn[line_idx]
+            else:
+                db_key = content_part.strip() + str(len(db_inserts))
+            if db_key not in db_inserts:
+                db_inserts.add(db_key)
+                completion_timestamps.append(ts)
+                hourly_activity[ts.strftime('%H')] += 1
         
         events.append({
             'station': STATIONS[station_code]['name'],
@@ -183,12 +236,12 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             'lineNum': line_num,
         })
     
-    # Calculate cycle times from SN scan intervals
+    # Calculate cycle times from completion intervals (completion-to-completion, not scan-to-scan)
     cycle_times = []
-    if len(sn_timestamps) > 1:
-        for i in range(1, len(sn_timestamps)):
-            gap = (sn_timestamps[i] - sn_timestamps[i-1]).total_seconds()
-            if 0 < gap < 300:  # Filter outliers
+    if len(completion_timestamps) > 1:
+        for i in range(1, len(completion_timestamps)):
+            gap = (completion_timestamps[i] - completion_timestamps[i-1]).total_seconds()
+            if 0 < gap < 300:  # filter outliers > 5 min
                 cycle_times.append(gap)
     
     # Find duplicates
@@ -201,34 +254,44 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
         'scanEvents': len([e for e in events if e['category'] == 'Scan']),
         'pressEvents': len([e for e in events if e['category'] == 'Press']),
         'dbEvents': len([e for e in events if e['category'] == 'Database']),
-        'completedUnits': len(seen_sns),
+        'completedUnits': len(db_inserts),
         'snScans': len(seen_sns),
         'snDuplicates': len(duplicates),
         'snDuplicateList': [{'sn': sn, 'count': c} for sn, c in duplicates[:10]],
         'hourlyActivity': dict(hourly_activity),
         'firstEvent': all_timestamps[0].isoformat() if all_timestamps else None,
         'lastEvent': all_timestamps[-1].isoformat() if all_timestamps else None,
+        'completionTimestamps': [t.isoformat() for t in completion_timestamps],
         'cycleTimeMedian': statistics.median(cycle_times) if cycle_times else None,
         'cycleTimeMean': statistics.mean(cycle_times) if cycle_times else None,
         'cycleTimeMax': max(cycle_times) if cycle_times else None,
-        'snScanIntervalMedian': statistics.median(cycle_times) if cycle_times else None,
-        'snScanIntervalMean': statistics.mean(cycle_times) if cycle_times else None,
     }
+
+
+def parse_sql_export(content: str) -> Dict[str, Any]:
+    """Parse SQL CSV export and return row count (= units produced)."""
+    try:
+        reader = csv.DictReader(io.StringIO(content))
+        rows = list(reader)
+        return {'rowCount': len(rows)}
+    except Exception:
+        return {'rowCount': 0}
 
 
 def parse_error_log(content: str, station_code: str, start_filter: Optional[datetime] = None) -> Dict[str, Any]:
     """Parse error log and extract error events with durations."""
+    log_date = extract_log_date(content)
     lines = content.split('\n')
     errors = []
     error_timeline = []
     pending_errors = {}
     
+    # Machine state transition codes — not real errors, filter them out
+    MACHINE_STATE_CODES = {'12000', '12001'}
+
     # Different patterns for different stations
     if station_code in ['BS', 'BA']:
-        if station_code == 'BS':
-            pattern = re.compile(r'^\[(\d{1,2}:\d{2}:\d{2} [AP]M)\],?\s*\[([A-Z]+)\]\s*\[(\d+)\]\s*(.*)')
-        else:
-            pattern = re.compile(r'^\[(\d{1,2}:\d{2}:\d{2} [AP]M)\]\[([A-Z]+)\]\s*\[(\d+)\]\s*(.*)')
+        pattern = re.compile(r'^\[(\d{1,2}:\d{2}:\d{2} [AP]M)\],?\s*\[([A-Z]+)\]\s*\[(\d+)\]\s*(.*)')
         
         for line in lines:
             match = pattern.match(line.strip())
@@ -236,7 +299,7 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
                 continue
             
             ts_str, status, code, message = match.groups()
-            ts = parse_timestamp(ts_str)
+            ts = parse_timestamp(ts_str, log_date)
             if not ts:
                 continue
             
@@ -245,6 +308,9 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
             
             message = message.strip()
             if message == '(null)' or not message:
+                continue
+
+            if code in MACHINE_STATE_CODES:
                 continue
             
             error_key = f"{code}_{message}"
@@ -285,7 +351,7 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
                 continue
             
             ts_str, status, code, message = match.groups()
-            ts = parse_timestamp(ts_str)
+            ts = parse_timestamp(ts_str, log_date)
             if not ts:
                 continue
             
@@ -301,7 +367,10 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
                 message = message.split('==>')[0].strip()
             
             error_key = f"{code}_{message}"
-            
+
+            if code in MACHINE_STATE_CODES:
+                continue
+
             if status == 'An ERROR':
                 pending_errors[error_key] = {
                     'station': STATIONS[station_code]['name'],
@@ -332,13 +401,12 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
     # Calculate total downtime
     total_downtime = sum(e.get('durationSec', 0) for e in error_timeline)
     
-    # Calculate MTBF (Mean Time Between Failures)
+    # Calculate MTBF: total operating time / number of failures
     mtbf = None
-    if len(error_timeline) > 1:
+    if len(error_timeline) >= 1:
         times = sorted(e['startTimeMs'] for e in error_timeline)
-        intervals = [(times[i] - times[i-1]) / 1000 / 60 for i in range(1, len(times))]
-        if intervals:
-            mtbf = {'minutes': statistics.mean(intervals), 'count': len(error_timeline)}
+        total_span_min = (times[-1] - times[0]) / 1000 / 60
+        mtbf = {'minutes': total_span_min / len(error_timeline), 'count': len(error_timeline)}
     
     return {
         'totalErrors': len(errors),
@@ -465,78 +533,96 @@ def analyze_cross_station(all_errors: List[Dict], window_sec: int = 60) -> Dict[
 
 
 def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str, Any]]:
-    """Analyze serial-by-serial cycle times."""
-    events = barcode_result.get('events', [])
-    
-    # Filter to SN scan events only
-    sn_events = [e for e in events if e.get('sn') and e.get('category') == 'Scan']
-    
-    if len(sn_events) < 2:
+    """Analyze serial-by-serial cycle times using unit completion timestamps."""
+    completion_ts_strs = barcode_result.get('completionTimestamps', [])
+    completion_timestamps = [datetime.fromisoformat(t) for t in completion_ts_strs]
+
+    if len(completion_timestamps) < 2:
         return None
-    
-    # Build units list with gaps
+
+    # Stoppage = gap > 300s (5 min) — a genuine line halt across all stations.
+    # Buffer = gap between normal cycle time and 300s — slow but not stopped.
+    normal_cycle = STATIONS[station_code].get('normalCycleSec', 60)
+    stoppage_threshold = 300
+    buffer_threshold = normal_cycle
+
+    # Build a time-indexed lookup of DB events that have SNs
+    db_events_with_sn = [
+        e for e in barcode_result.get('events', [])
+        if e.get('category') == 'Database' and e.get('sn')
+    ]
+
+    def find_sn_for_completion(ts: datetime) -> Optional[str]:
+        """Find the SN from the DB event closest to (and not after) this completion timestamp."""
+        ts_ms = int(ts.timestamp() * 1000)
+        best = None
+        best_diff = float('inf')
+        for e in db_events_with_sn:
+            diff = abs(e['timeMs'] - ts_ms)
+            if diff < best_diff:
+                best_diff = diff
+                best = e['sn']
+        return best if best_diff < 5000 else None  # within 5s
+
+    # Build units list from completions
     units = []
-    seen_sns = set()
-    
-    for i, event in enumerate(sn_events):
-        sn = event.get('sn')
-        if sn in seen_sns:
-            continue
-        seen_sns.add(sn)
-        
-        time_ms = event.get('timeMs', 0)
+    for i, ts in enumerate(completion_timestamps):
+        sn = find_sn_for_completion(ts)
+        time_ms = int(ts.timestamp() * 1000)
         gap = 0
         if units:
             gap = (time_ms - units[-1]['timeMs']) / 1000
-        
+
         units.append({
             'n': len(units) + 1,
-            'time': event.get('timeStr', ''),
+            'time': ts.strftime('%I:%M:%S %p').lstrip('0'),
             'timeMs': time_ms,
             'sn': sn,
             'gap': int(gap),
-            'isStoppage': gap > 60,
-            'isBuffer': gap < 30 and gap > 0,
+            'isStoppage': gap > stoppage_threshold,
+            'isBuffer': buffer_threshold < gap <= stoppage_threshold,
         })
-    
+
     if len(units) < 2:
         return None
-    
-    # Calculate stats
-    gaps = [u['gap'] for u in units[1:] if u['gap'] > 0]
-    
-    # Identify production runs (gaps > 60s indicate stoppages)
+
+    gaps = [u['gap'] for u in units[1:] if 0 < u['gap'] <= stoppage_threshold]
+
+    # Production runs — split on stoppages
     runs = []
     run_start = 0
     run_number = 0
-    
+
     for i, unit in enumerate(units):
-        if unit['isStoppage'] or i == len(units) - 1:
-            if i > run_start:
+        is_last = i == len(units) - 1
+        if unit['isStoppage'] or is_last:
+            # Stoppage: run is [run_start, i), stoppage unit is not part of the run
+            # Last unit: run is [run_start, i] inclusive
+            run_end = i if unit['isStoppage'] else i + 1
+            run_units = units[run_start:run_end]
+            if len(run_units) > 0:
                 run_number += 1
-                run_units = units[run_start:i] if unit['isStoppage'] else units[run_start:i+1]
-                if len(run_units) > 0:
-                    duration = (run_units[-1]['timeMs'] - run_units[0]['timeMs']) / 1000
-                    runs.append({
-                        'runNumber': run_number,
-                        'startTime': run_units[0]['time'],
-                        'endTime': run_units[-1]['time'],
-                        'numUnits': len(run_units),
-                        'durationSec': int(duration),
-                        'uph': (len(run_units) / duration * 3600) if duration > 0 else 0,
-                        'stoppageTime': unit['gap'] if unit['isStoppage'] else None,
-                    })
-            run_start = i
-    
-    # Overall UPH: total units / total elapsed time from first to last scan
+                duration = (run_units[-1]['timeMs'] - run_units[0]['timeMs']) / 1000
+                runs.append({
+                    'runNumber': run_number,
+                    'startTime': run_units[0]['time'],
+                    'endTime': run_units[-1]['time'],
+                    'numUnits': len(run_units),
+                    'durationSec': int(duration),
+                    'uph': (len(run_units) / duration * 3600) if duration > 0 else 0,
+                    'stoppageTime': unit['gap'] if unit['isStoppage'] else None,
+                })
+            run_start = i  # next run starts at the stoppage unit itself
+
+    # Overall UPH: total units / total elapsed time
     overall_uph = None
     if len(units) >= 2:
         total_elapsed_sec = (units[-1]['timeMs'] - units[0]['timeMs']) / 1000
         if total_elapsed_sec > 0:
             overall_uph = round(len(units) / total_elapsed_sec * 3600, 1)
 
-    # Average Normal Cycle Time: mean of gaps that are not stoppages (< 60s)
-    normal_gaps = [u['gap'] for u in units[1:] if 0 < u['gap'] < 60]
+    # Avg Normal Cycle Time: mean of gaps below the stoppage threshold
+    normal_gaps = [u['gap'] for u in units[1:] if 0 < u['gap'] <= stoppage_threshold]
     avg_normal_cycle_time = round(statistics.mean(normal_gaps), 1) if normal_gaps else None
 
     return {
@@ -548,6 +634,10 @@ def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str
         },
         'units': units,
         'runs': runs,
+        'thresholds': {
+            'normal': normal_cycle,
+            'stoppage': stoppage_threshold,
+        },
         'stats': {
             'totalUnits': len(units),
             'minGap': min(gaps) if gaps else 0,
@@ -596,7 +686,7 @@ async def upload_file(
 
 
 @router.post("/analyze")
-def run_analysis(start_time: Optional[str] = None):
+async def run_analysis(start_time: Optional[str] = None):
     """Run full analysis across all uploaded stations."""
     
     # Parse start time filter
@@ -651,11 +741,17 @@ def run_analysis(start_time: Optional[str] = None):
             for err in error_result.get('errorTimeline', []):
                 err['station'] = STATIONS[station_code]['name']
                 all_errors.append(err)
-        
+
+        # Parse SQL export if available
+        sql_result = None
+        if station_data.get('sql_content'):
+            sql_result = parse_sql_export(station_data['sql_content'])
+
         station_analyses.append({
             'station': station_info,
             'barcode': barcode_result,
             'errors': error_result,
+            'sql': sql_result,
         })
     
     # Run cross-station analysis
