@@ -4420,6 +4420,39 @@
 .card-header-right {
   text-align: right;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.card-units-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.card-units-count strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.card-units-dash {
+  color: var(--text-dim);
+}
+.card-clean {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-success);
+}
+.card-errors-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-danger);
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .card-unit-count {

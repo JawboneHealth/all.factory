@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { StationFileUpload } from '../components/StationFileUpload';
 import { AnalyticsTabs } from '../components/AnalyticsTabs';
 import { DashboardView } from '../components/DashboardView';
@@ -7,6 +7,7 @@ import { EventTimelineView } from '../components/EventTimelineView';
 import { IssueAnalysisView } from '../components/IssueAnalysisView';
 import { SerialAnalysisView } from '../components/SerialAnalysisView';
 import { AnalyticsHome } from '../components/AnalyticsHome';
+import { useAssistantContext } from '../components/Assistant/AssistantContext';
 import { 
   STATIONS, 
   type StationFiles, 
@@ -43,10 +44,8 @@ export function ProductAnalytics() {
         [stationCode]: {
           ...prev.stationFiles[stationCode],
           stationCode,
-          ...(fileType === 'sql'
-            ? { sqlExport: file, sqlExportName: file.name }
-            : { [`${fileType}Log`]: file, [`${fileType}LogName`]: file.name }
-          ),
+          [`${fileType}Log`]: file,
+          [`${fileType}LogName`]: file.name,
         }
       }
     }));
@@ -115,7 +114,7 @@ export function ProductAnalytics() {
       // Auto-save to database with summary stats
       try {
         const totalUnits = (analysisData.station_analyses || []).reduce(
-          (acc: number, s: any) => acc + (s.barcode?.completedUnits || 0), 0
+          (acc: number, s: any) => Math.max(acc, s.barcode?.completedUnits || 0), 0
         );
         const totalErrors = (analysisData.station_analyses || []).reduce(
           (acc: number, s: any) => acc + (s.errors?.totalEvents || s.errors?.events?.length || 0), 0
@@ -190,6 +189,21 @@ export function ProductAnalytics() {
     const f = state.stationFiles[key];
     return f.barcodeLog || f.errorLog || f.sqlExport;
   });
+
+  const { mergeContext } = useAssistantContext();
+  useEffect(() => {
+    mergeContext({
+      analytics_view: view,
+      analytics_tab: view === 'results' ? activeTab : undefined,
+      station_count: state.stationAnalyses.length,
+      total_units: state.stationAnalyses.reduce(
+        (acc, s: any) => acc + ((s.sql?.rowCount ?? s.barcode?.completedUnits) || 0), 0
+      ),
+      total_errors: state.stationAnalyses.reduce(
+        (acc, s: any) => acc + (s.errors?.totalErrors || 0), 0
+      ),
+    });
+  }, [view, activeTab, state.stationAnalyses]);
 
   // Home screen
   if (view === 'home') {
