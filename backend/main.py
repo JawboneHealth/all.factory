@@ -7,6 +7,7 @@ from models import Base
 from routers.cleanup import router as cleanup_router
 from routers.analytics import router as analytics_router
 from routers.analyses import router as analyses_router
+from routers.assistant import router as assistant_router
 
 # Create tables on startup
 Base.metadata.create_all(bind=engine)
@@ -28,6 +29,7 @@ app.add_middleware(
 app.include_router(cleanup_router)
 app.include_router(analytics_router)
 app.include_router(analyses_router)
+app.include_router(assistant_router)
 
 @app.get("/")
 def root():

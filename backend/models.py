@@ -22,6 +22,17 @@ class Analysis(Base):
     station_count = Column(Integer, default=0)
 
     def to_dict(self):
+        # Build a slim station summary for the card view (no full event/timeline data)
+        station_analyses = []
+        if self.result:
+            for s in (self.result.get("station_analyses") or []):
+                station_analyses.append({
+                    "station": s.get("station"),
+                    "barcode": {"completedUnits": (s.get("barcode") or {}).get("completedUnits")} if s.get("barcode") else None,
+                    "sql":     {"rowCount": (s.get("sql") or {}).get("rowCount")} if s.get("sql") else None,
+                    "errors":  {"totalErrors": (s.get("errors") or {}).get("totalErrors", 0)} if s.get("errors") else None,
+                })
+
         return {
             "id":            self.id,
             "name":          self.name,
@@ -32,6 +43,7 @@ class Analysis(Base):
             "total_units":   self.total_units,
             "total_errors":  self.total_errors,
             "station_count": self.station_count,
+            "result":        {"station_analyses": station_analyses},
         }
 
     def to_dict_full(self):
