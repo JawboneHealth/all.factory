@@ -113,10 +113,15 @@ export interface ErrorEvent {
 }
 
 // Station analysis result
+export interface SqlAnalysis {
+  rowCount: number;
+}
+
 export interface StationAnalysis {
   station: Station;
   barcode: BarcodeAnalysis | null;
   errors: ErrorAnalysis | null;
+  sql: SqlAnalysis | null;
 }
 
 export interface BarcodeAnalysis {
@@ -207,6 +212,10 @@ export interface SerialAnalysis {
   station: Station;
   units: SerialUnit[];
   runs: ProductionRun[];
+  thresholds: {
+    normal: number;
+    stoppage: number;
+  };
   stats: {
     totalUnits: number;
     minGap: number;

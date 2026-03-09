@@ -92,22 +92,23 @@ export function DashboardView({ analyses }: Props) {
     return aIdx - bIdx;
   });
 
-  // Calculate totals
+  // Calculate totals — prefer SQL row count when available
   const totals = useMemo(() => sortedAnalyses.reduce(
     (acc, a) => ({
-      units: acc.units + (a.barcode?.completedUnits || 0),
+      units: acc.units + (a.sql?.rowCount ?? a.barcode?.completedUnits ?? 0),
       errors: acc.errors + (a.errors?.totalErrors || 0),
       downtime: acc.downtime + (a.errors?.totalDowntimeMin || 0),
     }),
     { units: 0, errors: 0, downtime: 0 }
   ), [analyses]);
 
-  // Find bottleneck (highest cycle time)
-  const bottleneck = useMemo(() => sortedAnalyses.reduce((worst, a) => {
-    const ct = a.barcode?.cycleTimeMedian || 0;
+  // Find bottleneck: station with highest median cycle time (barcode only — serial stations like TR excluded by design)
+  const bottleneck = useMemo(() => sortedAnalyses.reduce<StationAnalysis | null>((worst, a) => {
+    if (!a.barcode?.cycleTimeMedian) return worst;
+    const ct = a.barcode.cycleTimeMedian;
     const worstCt = worst?.barcode?.cycleTimeMedian || 0;
     return ct > worstCt ? a : worst;
-  }, sortedAnalyses[0]), [sortedAnalyses]);
+  }, null), [sortedAnalyses]);
 
   const getHealthStatus = (analysis: StationAnalysis) => {
     const errors = analysis.errors?.totalErrors || 0;
