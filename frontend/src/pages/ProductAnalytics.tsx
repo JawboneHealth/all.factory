@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { StationFileUpload } from '../components/StationFileUpload';
 import { AnalyticsTabs } from '../components/AnalyticsTabs';
 import { DashboardView } from '../components/DashboardView';
@@ -6,19 +6,13 @@ import { ErrorTimelineView } from '../components/ErrorTimelineView';
 import { EventTimelineView } from '../components/EventTimelineView';
 import { IssueAnalysisView } from '../components/IssueAnalysisView';
 import { SerialAnalysisView } from '../components/SerialAnalysisView';
+import { AnalyticsHome } from '../components/AnalyticsHome';
 import { 
   STATIONS, 
   type StationFiles, 
   type AnalyticsTab, 
   type AnalyticsState 
 } from '../types';
-import {
-  cacheAnalyticsData,
-  getCachedAnalyticsData,
-  hasValidAnalyticsCache,
-  getAnalyticsCacheInfo,
-  clearAnalyticsCache,
-} from '../utils/cache';
 import { generateDashboardHtml, generateErrorTimelineHtml, generateEventTimelineHtml, generateCrossStationHtml, generateSerialHtml, downloadHtml } from '../utils/exportHtml';
 import './ProductAnalytics.css';
 
@@ -37,64 +31,9 @@ export function ProductAnalytics() {
   });
   
   const [timeFilter, setTimeFilter] = useState<string>('');
-  const [cacheInfo, setCacheInfo] = useState<Awaited<ReturnType<typeof getAnalyticsCacheInfo>>>(null);
-  const [checkingCache, setCheckingCache] = useState(true);
   const [showExportMenu, setShowExportMenu] = useState(false);
-
-  // Check for cached data on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkCache() {
-      try {
-        const valid = await hasValidAnalyticsCache();
-        if (!valid || cancelled) return;
-
-        const cached = await getCachedAnalyticsData();
-        if (cached && !cancelled) {
-          setState(prev => ({
-            ...prev,
-            analysisComplete: true,
-            stationAnalyses: cached.stationAnalyses || [],
-            crossStationAnalysis: cached.crossStationAnalysis || null,
-            serialAnalyses: cached.serialAnalyses || [],
-            allEvents: cached.allEvents || [],
-          }));
-          const info = await getAnalyticsCacheInfo();
-          if (!cancelled) setCacheInfo(info);
-        }
-      } finally {
-        if (!cancelled) setCheckingCache(false);
-      }
-    }
-
-    checkCache();
-    return () => { cancelled = true; };
-  }, []);
-
-  // Update cache info periodically
-  useEffect(() => {
-    if (!state.analysisComplete) return;
-    
-    const interval = setInterval(async () => {
-      const info = await getAnalyticsCacheInfo();
-      setCacheInfo(info);
-      
-      // If cache expired, reset state
-      if (!info) {
-        setState(prev => ({
-          ...prev,
-          analysisComplete: false,
-          stationAnalyses: [],
-          crossStationAnalysis: null,
-          serialAnalyses: [],
-          allEvents: [],
-        }));
-      }
-    }, 10000); // Check every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, [state.analysisComplete]);
+  const [view, setView] = useState<'home' | 'upload' | 'results'>('home');
+  const [loadedAnalysisId, setLoadedAnalysisId] = useState<string | null>(null);
 
   const handleFileUpload = useCallback((stationCode: string, fileType: 'barcode' | 'error' | 'sql', file: File) => {
     setState(prev => ({
@@ -104,8 +43,10 @@ export function ProductAnalytics() {
         [stationCode]: {
           ...prev.stationFiles[stationCode],
           stationCode,
-          [`${fileType}Log`]: file,
-          [`${fileType}LogName`]: file.name,
+          ...(fileType === 'sql'
+            ? { sqlExport: file, sqlExportName: file.name }
+            : { [`${fileType}Log`]: file, [`${fileType}LogName`]: file.name }
+          ),
         }
       }
     }));
@@ -128,53 +69,36 @@ export function ProductAnalytics() {
     setState(prev => ({ ...prev, isAnalyzing: true }));
 
     try {
-      // Always reset backend station store before uploading new files
-      // This prevents old station data from bleeding into new analyses
       await fetch(`${API_BASE}/analytics/reset`, { method: 'POST' });
 
-      // Upload all files
       const uploadPromises: Promise<Response>[] = [];
-      const uploadedFiles: Record<string, string[]> = {};
-      const stations: string[] = [];
       
       for (const [stationCode, files] of Object.entries(state.stationFiles)) {
-        stations.push(stationCode);
-        
         if (files.barcodeLog) {
           const formData = new FormData();
           formData.append('file', files.barcodeLog);
           formData.append('station', stationCode);
           formData.append('type', 'barcode');
-          uploadPromises.push(
-            fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData })
-          );
-          (uploadedFiles[stationCode] ??= []).push('barcode');
+          uploadPromises.push(fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData }));
         }
         if (files.errorLog) {
           const formData = new FormData();
           formData.append('file', files.errorLog);
           formData.append('station', stationCode);
           formData.append('type', 'error');
-          uploadPromises.push(
-            fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData })
-          );
-          (uploadedFiles[stationCode] ??= []).push('error');
+          uploadPromises.push(fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData }));
         }
         if (files.sqlExport) {
           const formData = new FormData();
           formData.append('file', files.sqlExport);
           formData.append('station', stationCode);
           formData.append('type', 'sql');
-          uploadPromises.push(
-            fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData })
-          );
-          (uploadedFiles[stationCode] ??= []).push('sql');
+          uploadPromises.push(fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData }));
         }
       }
 
       await Promise.all(uploadPromises);
 
-      // Run analysis
       const params = new URLSearchParams();
       if (timeFilter) params.append('start_time', timeFilter);
       
@@ -188,13 +112,29 @@ export function ProductAnalytics() {
         allEvents: analysisData.all_events || [],
       };
 
-      // Cache the results for 5 minutes
-      cacheAnalyticsData({
-        ...newState,
-        stations,
-        uploadedFiles,
-        analysisTimestamp: Date.now(),
-      });
+      // Auto-save to database with summary stats
+      try {
+        const totalUnits = (analysisData.station_analyses || []).reduce(
+          (acc: number, s: any) => acc + (s.barcode?.completedUnits || 0), 0
+        );
+        const totalErrors = (analysisData.station_analyses || []).reduce(
+          (acc: number, s: any) => acc + (s.errors?.totalEvents || s.errors?.events?.length || 0), 0
+        );
+        const saveRes = await fetch(`${API_BASE}/analyses/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            result: analysisData,
+            total_units: totalUnits,
+            total_errors: totalErrors,
+            station_count: (analysisData.station_analyses || []).length,
+          }),
+        });
+        const saved = await saveRes.json();
+        setLoadedAnalysisId(saved.id);
+      } catch (e) {
+        console.warn('Failed to save analysis to DB', e);
+      }
 
       setState(prev => ({
         ...prev,
@@ -203,7 +143,7 @@ export function ProductAnalytics() {
         ...newState,
       }));
       
-      setCacheInfo(await getAnalyticsCacheInfo());
+      setView('results');
     } catch (error) {
       console.error('Analysis failed:', error);
       setState(prev => ({ ...prev, isAnalyzing: false }));
@@ -211,10 +151,7 @@ export function ProductAnalytics() {
   }, [state.stationFiles, timeFilter]);
 
   const reset = useCallback(() => {
-    // Clear cache and backend station store when resetting
-    clearAnalyticsCache();
     fetch(`${API_BASE}/analytics/reset`, { method: 'POST' });
-    
     setState({
       stationFiles: {},
       isAnalyzing: false,
@@ -225,7 +162,28 @@ export function ProductAnalytics() {
       allEvents: [],
     });
     setActiveTab('dashboard');
-    setCacheInfo(null);
+    setLoadedAnalysisId(null);
+    setView('home');
+  }, []);
+
+  const openAnalysis = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/analyses/${id}`);
+      const data = await res.json();
+      const result = data.result;
+      setState(prev => ({
+        ...prev,
+        analysisComplete: true,
+        stationAnalyses: result?.station_analyses || [],
+        crossStationAnalysis: result?.cross_station || null,
+        serialAnalyses: result?.serial_analyses || [],
+        allEvents: result?.all_events || [],
+      }));
+      setLoadedAnalysisId(id);
+      setView('results');
+    } catch (e) {
+      console.error('Failed to load analysis', e);
+    }
   }, []);
 
   const hasFiles = Object.keys(state.stationFiles).some(key => {
@@ -233,20 +191,26 @@ export function ProductAnalytics() {
     return f.barcodeLog || f.errorLog || f.sqlExport;
   });
 
-  // Wait for cache check before rendering
-  if (checkingCache) {
+  // Home screen
+  if (view === 'home') {
     return (
-      <div className="analytics-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <span className="spinner" />
+      <div className="analytics-page">
+        <AnalyticsHome
+          onNewAnalysis={() => setView('upload')}
+          onOpenAnalysis={openAnalysis}
+        />
       </div>
     );
   }
 
-  // Landing / Upload view
-  if (!state.analysisComplete) {
+  // Upload view
+  if (view === 'upload') {
     return (
       <div className="analytics-page">
         <section className="analytics-hero">
+          <button className="back-button" onClick={() => setView('home')}>
+            ← Back
+          </button>
           <span className="hero-badge">Factory Tools Suite</span>
           <h1>Production Analytics</h1>
           <p className="hero-subtitle">
@@ -349,11 +313,14 @@ export function ProductAnalytics() {
     );
   }
 
-  // Analysis results view
+  // Results view
   return (
     <div className="analytics-page results-mode">
       <div className="analytics-header">
         <div className="header-left">
+          <button className="back-button" onClick={() => setView('home')}>
+            ← Back
+          </button>
           <h1>Production Analytics</h1>
           <span className="header-sep">/</span>
           <span className="analysis-info">
@@ -365,14 +332,6 @@ export function ProductAnalytics() {
           </span>
         </div>
         <div className="header-actions">
-          {cacheInfo && (
-            <div className="cache-indicator">
-              <span className="cache-dot" />
-              <span className="cache-text">
-                {cacheInfo.remainingStr}
-              </span>
-            </div>
-          )}
           <div className="export-dropdown-wrapper">
             <button
               className="export-button"
