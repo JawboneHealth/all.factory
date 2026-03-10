@@ -11,6 +11,7 @@ export interface Message {
 export interface ScreenContext {
   page: string;
   // Data Cleanup
+  station?: string;
   mmi_uploaded?: boolean;
   sql_uploaded?: boolean;
   analyzed?: boolean;
