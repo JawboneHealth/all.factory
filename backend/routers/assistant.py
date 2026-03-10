@@ -20,6 +20,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 class ScreenContext(BaseModel):
     page: str                          # "home" | "data-cleanup" | "analytics"
     # Data Cleanup context
+    station: Optional[str] = None      # "BS" | "BA" | "TR" | "TO" | "LA" | "FV"
     mmi_uploaded: bool = False
     sql_uploaded: bool = False
     analyzed: bool = False

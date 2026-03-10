@@ -26,6 +26,7 @@ Issue Types Detected:
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 import pandas as pd
 import io
 from typing import Optional
