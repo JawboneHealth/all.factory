@@ -24,7 +24,7 @@ export function StationFileUpload({ station, files, onUpload, onRemove }: Props)
   const fileSlots: Array<{ type: 'barcode' | 'error' | 'sql'; label: string; accept: string; filename?: string }> = [
     { type: 'barcode', label: 'Barcode Log', accept: '.log,.txt', filename: files?.barcodeLogName },
     { type: 'error', label: 'Error Log', accept: '.log,.txt', filename: files?.errorLogName },
-    { type: 'sql', label: 'SQL File', accept: '.xlsx,.xls,.csv', filename: files?.sqlExportName },
+    { type: 'sql', label: 'SQL Product File', accept: '.xlsx,.xls,.csv', filename: files?.sqlExportName },
   ];
 
   const uploadedCount = fileSlots.filter(s => s.filename).length;

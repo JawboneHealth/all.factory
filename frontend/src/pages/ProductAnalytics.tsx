@@ -32,11 +32,14 @@ export function ProductAnalytics() {
   });
   
   const [timeFilter, setTimeFilter] = useState<string>('');
+  const [excludeWindows, setExcludeWindows] = useState<Array<{start: string; end: string}>>([]);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [view, setView] = useState<'home' | 'upload' | 'results'>('home');
   const [loadedAnalysisId, setLoadedAnalysisId] = useState<string | null>(null);
 
   const handleFileUpload = useCallback((stationCode: string, fileType: 'barcode' | 'error' | 'sql', file: File) => {
+    const fileKey  = fileType === 'sql' ? 'sqlExport'     : `${fileType}Log`;
+    const nameKey  = fileType === 'sql' ? 'sqlExportName' : `${fileType}LogName`;
     setState(prev => ({
       ...prev,
       stationFiles: {
@@ -44,20 +47,22 @@ export function ProductAnalytics() {
         [stationCode]: {
           ...prev.stationFiles[stationCode],
           stationCode,
-          [`${fileType}Log`]: file,
-          [`${fileType}LogName`]: file.name,
+          [fileKey]: file,
+          [nameKey]: file.name,
         }
       }
     }));
   }, []);
 
   const handleFileRemove = useCallback((stationCode: string, fileType: 'barcode' | 'error' | 'sql') => {
+    const fileKey  = fileType === 'sql' ? 'sqlExport'     : `${fileType}Log`;
+    const nameKey  = fileType === 'sql' ? 'sqlExportName' : `${fileType}LogName`;
     setState(prev => {
       const stationFiles = { ...prev.stationFiles };
       if (stationFiles[stationCode]) {
         const updated = { ...stationFiles[stationCode] };
-        delete updated[`${fileType}Log` as keyof StationFiles];
-        delete updated[`${fileType}LogName` as keyof StationFiles];
+        delete updated[fileKey as keyof StationFiles];
+        delete updated[nameKey as keyof StationFiles];
         stationFiles[stationCode] = updated;
       }
       return { ...prev, stationFiles };
@@ -100,6 +105,8 @@ export function ProductAnalytics() {
 
       const params = new URLSearchParams();
       if (timeFilter) params.append('start_time', timeFilter);
+      const validWindows = excludeWindows.filter(w => w.start && w.end);
+      if (validWindows.length > 0) params.append('exclude_windows', JSON.stringify(validWindows));
       
       const analysisRes = await fetch(`${API_BASE}/analytics/analyze?${params}`, { method: 'POST' });
       const analysisData = await analysisRes.json();
@@ -249,6 +256,44 @@ export function ProductAnalytics() {
               />
             </label>
             <span className="hint">Only analyze events after this time</span>
+          </div>
+
+          <div className="exclude-windows-section">
+            <div className="exclude-windows-header">
+              <span className="exclude-windows-label">Exclude Time Windows (optional)</span>
+              <button
+                className="exclude-add-btn"
+                onClick={() => setExcludeWindows(prev => [...prev, { start: '', end: '' }])}
+              >
+                + Add Window
+              </button>
+            </div>
+            {excludeWindows.length === 0 && (
+              <p className="hint">Exclude specific periods from calculations — e.g. lunch breaks, shift changes.</p>
+            )}
+            {excludeWindows.map((w, i) => (
+              <div key={i} className="exclude-window-row">
+                <input
+                  type="text"
+                  placeholder="e.g., 11:00:00 AM"
+                  value={w.start}
+                  onChange={e => setExcludeWindows(prev => prev.map((x, j) => j === i ? { ...x, start: e.target.value } : x))}
+                />
+                <span className="exclude-to">to</span>
+                <input
+                  type="text"
+                  placeholder="e.g., 11:30:00 AM"
+                  value={w.end}
+                  onChange={e => setExcludeWindows(prev => prev.map((x, j) => j === i ? { ...x, end: e.target.value } : x))}
+                />
+                <button
+                  className="exclude-remove-btn"
+                  onClick={() => setExcludeWindows(prev => prev.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
         </section>
 
