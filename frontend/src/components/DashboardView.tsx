@@ -144,12 +144,18 @@ export function DashboardView({ analyses }: Props) {
     { units: 0, errors: 0, downtime: 0 }
   ), [analyses]);
 
-  // Find bottleneck: station with highest median cycle time (barcode only — serial stations like TR excluded by design)
+  // Find bottleneck: station with highest median cycle time; break ties using mean
   const bottleneck = useMemo(() => sortedAnalyses.reduce<StationAnalysis | null>((worst, a) => {
     if (!a.barcode?.cycleTimeMedian) return worst;
     const ct = a.barcode.cycleTimeMedian;
     const worstCt = worst?.barcode?.cycleTimeMedian || 0;
-    return ct > worstCt ? a : worst;
+    if (ct > worstCt) return a;
+    if (ct === worstCt) {
+      const mean = a.barcode.cycleTimeMean || 0;
+      const worstMean = worst?.barcode?.cycleTimeMean || 0;
+      return mean > worstMean ? a : worst;
+    }
+    return worst;
   }, null), [sortedAnalyses]);
 
   const getHealthStatus = (analysis: StationAnalysis) => {
