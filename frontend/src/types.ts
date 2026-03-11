@@ -68,7 +68,7 @@ export const STATIONS: Station[] = [
   { code: 'BA', name: 'Battery', icon: '🔋', color: '#34d399' },
   { code: 'TR', name: 'Trans', icon: '🔄', color: '#f472b6' },
   { code: 'TO', name: 'Top Shell', icon: '🔝', color: '#fbbf24' },
-  { code: 'LA', name: 'Laser', icon: '⚡', color: '#ef4444', note: 'Bottleneck station', noteType: 'warning' },
+  { code: 'LA', name: 'Laser', icon: '⚡', color: '#ef4444', noteType: 'warning' },
   { code: 'FV', name: 'FVT', icon: '🧪', color: '#06b6d4' },
 ];
 

@@ -1042,7 +1042,7 @@ const EVT_CATEGORIES = [
 
 const EVT_STATION_NAMES: Record<string, string> = {
   BS: 'Bottom Shell', BA: 'Battery Assembly', TR: 'Transfer',
-  TO: 'Top Shell', LA: 'Label Application', FV: 'Final Verification',
+  TO: 'Top Shell', LA: 'Laser', FV: 'Final Verification',
 };
 
 const EVT_CSS = `

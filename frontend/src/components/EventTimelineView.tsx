@@ -26,7 +26,7 @@ const STATION_NAMES: Record<string, string> = {
   BA: 'Battery Assembly', 
   TR: 'Transfer',
   TO: 'Top Shell',
-  LA: 'Label Application',
+  LA: 'Laser',
   FV: 'Final Verification',
 };
 

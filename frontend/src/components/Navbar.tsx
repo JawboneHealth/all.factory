@@ -37,7 +37,7 @@ export function Navbar() {
             <AlertCircle size={14} />
             Report Issue
           </button>
-          <span className="nav-version">v1.2</span>
+          <span className="nav-version">v2.0</span>
         </div>
       </nav>
 
