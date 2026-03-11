@@ -102,7 +102,9 @@ export function SerialAnalysisView({ analyses }: Props) {
   const [selectedStation, setSelectedStation] = useState<string>(analyses[0]?.station?.code || '');
   const [viewMode, setViewMode] = useState<'gaps' | 'runs'>('gaps');
   const [hoveredUnit, setHoveredUnit] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const [showAllUnits, setShowAllUnits] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Sync selected station when analyses list changes (e.g. after re-upload)
   useEffect(() => {
@@ -324,8 +326,17 @@ export function SerialAnalysisView({ analyses }: Props) {
                 </div>
                 
                 {/* Bars */}
-                <div className="chart-area">
-                  <div className="bars">
+                <div className="gap-chart-scroll" ref={scrollRef}>
+                  <div className="chart-area" style={{ width: `${Math.max((chartData.units.length - 1) * 12, 400)}px` }}>
+                    <div
+                      className="bars"
+                      onWheel={(e) => {
+                        if (scrollRef.current) {
+                          scrollRef.current.scrollLeft += e.deltaY;
+                          e.stopPropagation();
+                        }
+                      }}
+                    >
                     {chartData.units.slice(1).map((unit, idx) => {
                       const color = getGapColor(unit.gap, unit.isStoppage, unit.isBuffer);
                       const isCapped = unit.gap > chartData.maxGap;
@@ -336,8 +347,17 @@ export function SerialAnalysisView({ analyses }: Props) {
                         <div 
                           key={idx}
                           className={`bar-wrapper ${isHovered ? 'hovered' : ''}`}
-                          onMouseEnter={() => setHoveredUnit(idx)}
-                          onMouseLeave={() => setHoveredUnit(null)}
+                          onMouseEnter={(e) => {
+                            setHoveredUnit(idx);
+                            setTooltipPos({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseMove={(e) => {
+                            setTooltipPos({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseLeave={() => {
+                            setHoveredUnit(null);
+                            setTooltipPos(null);
+                          }}
                         >
                           <div 
                             className="bar"
@@ -349,42 +369,39 @@ export function SerialAnalysisView({ analyses }: Props) {
                                 : undefined,
                             }}
                           />
-                          
-                          {/* Tooltip */}
-                          {isHovered && (
-                            <div className="bar-tooltip">
-                              <div className="tt-row">
-                                <span>Unit</span>
-                                <strong>#{unit.n}</strong>
-                              </div>
-                              <div className="tt-row">
-                                <span>Gap</span>
-                                <strong style={{ color }}>{unit.gap}s</strong>
-                              </div>
-                              <div className="tt-row">
-                                <span>Time</span>
-                                <strong>{unit.time}</strong>
-                              </div>
-                              <div className="tt-row">
-                                <span>Status</span>
-                                <strong style={{ color }}>
-                                  {getGapStatus(unit.gap, unit.isStoppage, unit.isBuffer)}
-                                </strong>
-                              </div>
-                              {unit.sn && (
-                                <div className="tt-row">
-                                  <span>SN</span>
-                                  <code>{unit.sn}</code>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
                 </div>
+                </div>
               </div>
+
+              {/* Portal tooltip — renders at body level to escape overflow clipping */}
+              {hoveredUnit !== null && tooltipPos && chartData.units[hoveredUnit + 1] && (() => {
+                const unit = chartData.units[hoveredUnit + 1];
+                const color = getGapColor(unit.gap, unit.isStoppage, unit.isBuffer);
+                return createPortal(
+                  <div className="bar-tooltip" style={{
+                    position: 'fixed',
+                    left: tooltipPos.x + 12,
+                    top: tooltipPos.y - 10,
+                    transform: tooltipPos.x > window.innerWidth - 200 ? 'translateX(-110%)' : undefined,
+                    zIndex: 99999,
+                    pointerEvents: 'none',
+                  }}>
+                    <div className="tt-row"><span>Unit</span><strong>#{unit.n}</strong></div>
+                    <div className="tt-row"><span>Gap</span><strong style={{ color }}>{unit.gap}s</strong></div>
+                    <div className="tt-row"><span>Time</span><strong>{unit.time}</strong></div>
+                    <div className="tt-row">
+                      <span>Status</span>
+                      <strong style={{ color }}>{getGapStatus(unit.gap, unit.isStoppage, unit.isBuffer)}</strong>
+                    </div>
+                    {unit.sn && <div className="tt-row"><span>SN</span><code>{unit.sn}</code></div>}
+                  </div>,
+                  document.body
+                );
+              })()}
               
               {/* X Axis Label */}
               <div className="x-axis-label">
