@@ -145,10 +145,12 @@ export function AnalyticsHome({ onNewAnalysis, onOpenAnalysis }: Props) {
   );
 }
 
+const STATION_ORDER = ['Bottom Shell', 'Battery', 'Transfer', 'Top Shell', 'Laser', 'FVT'];
+
 const STATION_COLORS: Record<string, string> = {
   'Bottom Shell': '#818cf8',
   'Battery':      '#34d399',
-  'Trans':        '#f472b6',
+  'Transfer':     '#f472b6',
   'Top Shell':    '#fbbf24',
   'Laser':        '#ef4444',
   'FVT':          '#06b6d4',
@@ -157,7 +159,11 @@ const STATION_COLORS: Record<string, string> = {
 function AnalysisCard({ a, renamingId, renameValue, setRenameValue, onOpen, onStar, onDelete, onStartRename, onCommitRename, onCancelRename }: any) {
   const isRenaming = renamingId === a.id;
 
-  const stations: any[] = a.result?.station_analyses ?? [];
+  const stations: any[] = [...(a.result?.station_analyses ?? [])].sort((x, y) => {
+    const ai = STATION_ORDER.indexOf(x.station?.name ?? '');
+    const bi = STATION_ORDER.indexOf(y.station?.name ?? '');
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
   const maxUnits = Math.max(1, ...stations.map((s: any) =>
     s.sql?.rowCount ?? s.barcode?.completedUnits ?? 0
   ));
@@ -234,7 +240,7 @@ function AnalysisCard({ a, renamingId, renameValue, setRenameValue, onOpen, onSt
             return (
               <div key={i} className={`card-station-row ${i > 0 ? 'bordered' : ''}`}>
                 <div className="station-row-bar" style={{ background: color }} />
-                <span className="station-row-name">{name}</span>
+                <span className="station-row-name" title={name}>{name}</span>
                 <div className="station-row-track">
                   <div className="station-row-fill" style={{ width: `${pct}%`, background: color }} />
                 </div>
