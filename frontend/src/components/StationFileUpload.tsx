@@ -66,19 +66,16 @@ export function StationFileUpload({ station, files, onUpload, onRemove }: Props)
                 </button>
               </>
             ) : (
-              <>
+              <label className="file-label">
                 <input
                   type="file"
                   accept={accept}
                   onChange={handleChange(type)}
-                  id={`${station.code}-${type}`}
-                  className="file-input"
+                  style={{ display: 'none' }}
                 />
-                <label htmlFor={`${station.code}-${type}`} className="file-label">
-                  <span className="file-icon"><Plus size={14} /></span>
-                  <span className="file-type">{label}</span>
-                </label>
-              </>
+                <span className="file-icon"><Plus size={14} /></span>
+                <span className="file-type">{label}</span>
+              </label>
             )}
           </div>
         ))}
