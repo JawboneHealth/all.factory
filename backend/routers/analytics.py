@@ -33,6 +33,7 @@ store: Dict[str, Any] = {
     "analysis_results": None,
     "analysis_cached_at": None,
     "start_time_filter": None,
+    "exclude_windows": [],  # list of (start_dt, end_dt) tuples
 }
 
 CACHE_EXPIRY_SEC = 30 * 60  # 30 minutes
@@ -76,7 +77,18 @@ def parse_timestamp(ts_str: str, log_date: str = "") -> Optional[datetime]:
         return None
 
 
-def parse_barcode_log(content: str, station_code: str, start_filter: Optional[datetime] = None) -> Dict[str, Any]:
+def is_excluded(ts: datetime, exclude_windows: List[tuple]) -> bool:
+    """Return True if ts falls within any excluded window."""
+    for (w_start, w_end) in exclude_windows:
+        if w_start <= ts <= w_end:
+            return True
+    return False
+
+
+def parse_barcode_log(content: str, station_code: str, start_filter: Optional[datetime] = None, exclude_windows: Optional[List[tuple]] = None) -> Dict[str, Any]:
+    """Parse barcode log and extract events and metrics."""
+    if exclude_windows is None:
+        exclude_windows = []
     """Parse barcode log and extract events and metrics."""
     log_date = extract_log_date(content)
     lines = content.replace('\r\n', '\n').replace('\r', '\n').split('\n')
@@ -117,6 +129,9 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             continue
         
         if start_filter and ts < start_filter:
+            continue
+        
+        if exclude_windows and is_excluded(ts, exclude_windows):
             continue
         
         all_timestamps.append(ts)
@@ -268,18 +283,127 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
     }
 
 
-def parse_sql_export(content: str) -> Dict[str, Any]:
-    """Parse SQL CSV export and return row count (= units produced)."""
+def parse_sql_export(
+    content: str,
+    start_filter: Optional[datetime] = None,
+    exclude_windows: Optional[List[tuple]] = None,
+) -> Dict[str, Any]:
+    """Parse SQL CSV export into unit counts, timestamps, and cycle time stats.
+    
+    This is the primary source of truth for: completedUnits, UPH, cycle times,
+    completionTimestamps, and hourlyActivity. Falls back to barcode only when
+    SQL is not uploaded.
+    """
+    if exclude_windows is None:
+        exclude_windows = []
     try:
         reader = csv.DictReader(io.StringIO(content))
         rows = list(reader)
-        return {'rowCount': len(rows)}
     except Exception:
-        return {'rowCount': 0}
+        return {'rowCount': 0, 'source': 'sql'}
+
+    date_field = None
+    for candidate in ('DATE', 'Date', 'date', 'TIMESTAMP'):
+        if rows and candidate in rows[0]:
+            date_field = candidate
+            break
+
+    completion_timestamps: List[datetime] = []
+    hourly_activity: Dict[str, int] = defaultdict(int)
+    sn_field = None
+
+    # Try to find a serial number field for unit data table
+    sn_candidates = [k for k in (rows[0].keys() if rows else [])
+                     if any(x in k.upper() for x in ('TOP_SHELL_SN', 'BOTTOM_SHELL_SN', 'LASER', 'SN'))]
+    if sn_candidates:
+        sn_field = sn_candidates[0]
+
+    units = []
+    for row in rows:
+        ts = None
+        if date_field:
+            raw = str(row.get(date_field, '')).strip()
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y%m%d%H%M%S"):
+                try:
+                    ts = datetime.strptime(raw, fmt)
+                    break
+                except:
+                    continue
+
+        if ts is None:
+            continue
+        if start_filter and ts < start_filter:
+            continue
+        if exclude_windows and is_excluded(ts, exclude_windows):
+            continue
+
+        completion_timestamps.append(ts)
+        hourly_activity[ts.strftime('%H')] += 1
+        units.append({
+            'ts': ts,
+            'sn': row.get(sn_field, '') if sn_field else '',
+            'row': row,
+        })
+
+    # Cycle times from completion-to-completion
+    cycle_times = []
+    if len(completion_timestamps) > 1:
+        sorted_ts = sorted(completion_timestamps)
+        for i in range(1, len(sorted_ts)):
+            gap = (sorted_ts[i] - sorted_ts[i - 1]).total_seconds()
+            if 0 < gap < 300:
+                cycle_times.append(gap)
+
+    # Overall UPH
+    overall_uph = None
+    if len(completion_timestamps) >= 2:
+        sorted_ts = sorted(completion_timestamps)
+        elapsed = (sorted_ts[-1] - sorted_ts[0]).total_seconds()
+        if elapsed > 0:
+            overall_uph = round(len(completion_timestamps) / elapsed * 3600, 1)
+
+    all_ts = sorted(completion_timestamps)
+    return {
+        'rowCount': len(rows),           # raw SQL row count (unfiltered)
+        'completedUnits': len(units),    # after start filter + exclusions
+        'completionTimestamps': [t.isoformat() for t in sorted(completion_timestamps)],
+        'cycleTimeMedian': statistics.median(cycle_times) if cycle_times else None,
+        'cycleTimeMean': statistics.mean(cycle_times) if cycle_times else None,
+        'cycleTimeMax': max(cycle_times) if cycle_times else None,
+        'overallUph': overall_uph,
+        'hourlyActivity': dict(hourly_activity),
+        'firstEvent': all_ts[0].isoformat() if all_ts else None,
+        'lastEvent': all_ts[-1].isoformat() if all_ts else None,
+        'units': units,   # kept for serial analysis, not serialized to JSON
+        'source': 'sql',
+    }
 
 
-def parse_error_log(content: str, station_code: str, start_filter: Optional[datetime] = None) -> Dict[str, Any]:
+def _sql_is_minute_precision(sql_result: Dict) -> bool:
+    """Return True if SQL timestamps lack second-level precision.
+    When True, cycle times derived from SQL will be multiples of 60s and useless.
+    We detect this by checking whether all cycle time gaps are multiples of 60.
+    """
+    ts_strs = sql_result.get('completionTimestamps', [])
+    if len(ts_strs) < 4:
+        return False
+    try:
+        timestamps = sorted(datetime.fromisoformat(t) for t in ts_strs[:20])
+        gaps = [(timestamps[i] - timestamps[i-1]).total_seconds()
+                for i in range(1, len(timestamps))
+                if 0 < (timestamps[i] - timestamps[i-1]).total_seconds() < 300]
+        if not gaps:
+            return False
+        # If every gap is a multiple of 60, timestamps are minute-only
+        return all(g % 60 == 0 for g in gaps)
+    except Exception:
+        return False
+
+
+def parse_error_log(content: str, station_code: str, start_filter: Optional[datetime] = None, exclude_windows: Optional[List[tuple]] = None) -> Dict[str, Any]:
     """Parse error log and extract error events with durations."""
+    if exclude_windows is None:
+        exclude_windows = []
     log_date = extract_log_date(content)
     lines = content.split('\n')
     errors = []
@@ -304,6 +428,9 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
                 continue
             
             if start_filter and ts < start_filter:
+                continue
+            
+            if exclude_windows and is_excluded(ts, exclude_windows):
                 continue
             
             message = message.strip()
@@ -356,6 +483,9 @@ def parse_error_log(content: str, station_code: str, start_filter: Optional[date
                 continue
             
             if start_filter and ts < start_filter:
+                continue
+            
+            if exclude_windows and is_excluded(ts, exclude_windows):
                 continue
             
             # Extract holding time if present
@@ -532,9 +662,21 @@ def analyze_cross_station(all_errors: List[Dict], window_sec: int = 60) -> Dict[
     }
 
 
-def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str, Any]]:
-    """Analyze serial-by-serial cycle times using unit completion timestamps."""
-    completion_ts_strs = barcode_result.get('completionTimestamps', [])
+def analyze_serial(barcode_result: Optional[Dict], station_code: str, sql_result: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+    """Analyze serial-by-serial cycle times using unit completion timestamps.
+    
+    SQL is the primary source when available (already deduplicated, confirmed
+    completions with SNs). Falls back to barcode completionTimestamps.
+    """
+    using_sql = False
+    if sql_result and sql_result.get('completionTimestamps'):
+        completion_ts_strs = sql_result['completionTimestamps']
+        using_sql = True
+    elif barcode_result:
+        completion_ts_strs = barcode_result.get('completionTimestamps', [])
+    else:
+        return None
+
     completion_timestamps = [datetime.fromisoformat(t) for t in completion_ts_strs]
 
     if len(completion_timestamps) < 2:
@@ -546,15 +688,24 @@ def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str
     stoppage_threshold = 300
     buffer_threshold = normal_cycle
 
-    # Build a time-indexed lookup of DB events that have SNs
-    db_events_with_sn = [
-        e for e in barcode_result.get('events', [])
+    # SN lookup: prefer SQL rows (direct), fall back to barcode DB events
+    sql_units_by_ts: Dict[int, str] = {}
+    if using_sql and sql_result.get('units'):
+        for u in sql_result['units']:
+            ts_ms = int(u['ts'].timestamp() * 1000)
+            sql_units_by_ts[ts_ms] = u.get('sn', '')
+
+    db_events_with_sn = [] if using_sql else [
+        e for e in (barcode_result or {}).get('events', [])
         if e.get('category') == 'Database' and e.get('sn')
     ]
 
     def find_sn_for_completion(ts: datetime) -> Optional[str]:
-        """Find the SN from the DB event closest to (and not after) this completion timestamp."""
         ts_ms = int(ts.timestamp() * 1000)
+        # SQL path: exact timestamp match
+        if using_sql:
+            return sql_units_by_ts.get(ts_ms) or None
+        # Barcode path: nearest DB event within 5s
         best = None
         best_diff = float('inf')
         for e in db_events_with_sn:
@@ -562,7 +713,7 @@ def analyze_serial(barcode_result: Dict, station_code: str) -> Optional[Dict[str
             if diff < best_diff:
                 best_diff = diff
                 best = e['sn']
-        return best if best_diff < 5000 else None  # within 5s
+        return best if best_diff < 5000 else None
 
     # Build units list from completions
     units = []
@@ -686,14 +837,30 @@ async def upload_file(
 
 
 @router.post("/analyze")
-async def run_analysis(start_time: Optional[str] = None):
+async def run_analysis(start_time: Optional[str] = None, exclude_windows: Optional[str] = None):
     """Run full analysis across all uploaded stations."""
+    import json as _json
     
     # Parse start time filter
     start_filter = None
     if start_time:
         start_filter = parse_timestamp(start_time)
         store["start_time_filter"] = start_time
+    
+    # Parse exclusion windows: JSON string like '[{"start":"11:00:00 AM","end":"11:30:00 AM"}]'
+    parsed_exclude: List[tuple] = []
+    if exclude_windows:
+        try:
+            windows = _json.loads(exclude_windows)
+            log_date = datetime.now().strftime("%Y-%m-%d")
+            for w in windows:
+                w_start = parse_timestamp(w.get("start", ""), log_date)
+                w_end = parse_timestamp(w.get("end", ""), log_date)
+                if w_start and w_end and w_start < w_end:
+                    parsed_exclude.append((w_start, w_end))
+        except Exception:
+            pass
+    store["exclude_windows"] = parsed_exclude
     
     station_analyses = []
     all_events = []
@@ -712,46 +879,90 @@ async def run_analysis(start_time: Optional[str] = None):
         barcode_result = None
         error_result = None
         
-        # Parse barcode log if available
+        # Parse SQL File if available (primary source for unit stats)
+        sql_result = None
+        if station_data.get('sql_content'):
+            sql_result = parse_sql_export(
+                station_data['sql_content'],
+                start_filter,
+                parsed_exclude,
+            )
+
+        # Parse barcode log if available (primary source for scan events/timeline)
+        barcode_result = None
         if station_data.get('barcode_content'):
             barcode_result = parse_barcode_log(
                 station_data['barcode_content'],
                 station_code,
-                start_filter
+                start_filter,
+                parsed_exclude,
             )
-            # Only treat as real data if we got actual scan/db events
-            # (prevents MMI-START-only files from generating phantom records)
             if barcode_result.get('totalEvents', 0) <= 1 and barcode_result.get('scanEvents', 0) == 0:
                 barcode_result = None
             else:
                 all_events.extend(barcode_result.get('events', []))
-                # Run serial analysis
-                serial = analyze_serial(barcode_result, station_code)
-                if serial:
-                    serial_analyses.append(serial)
-        
+
+        # Serial analysis: SQL timestamps preferred, barcode as fallback
+        serial = analyze_serial(barcode_result, station_code, sql_result)
+        if serial:
+            serial_analyses.append(serial)
+
         # Parse error log if available
         if station_data.get('error_content'):
             error_result = parse_error_log(
                 station_data['error_content'],
                 station_code,
-                start_filter
+                start_filter,
+                parsed_exclude,
             )
-            # Add station info to errors for cross-station analysis
             for err in error_result.get('errorTimeline', []):
                 err['station'] = STATIONS[station_code]['name']
                 all_errors.append(err)
 
-        # Parse SQL File if available
-        sql_result = None
-        if station_data.get('sql_content'):
-            sql_result = parse_sql_export(station_data['sql_content'])
+        # When SQL is available, override barcode unit/UPH stats so the
+        # dashboard uses the more reliable SQL-derived numbers.
+        # If barcode is absent, promote SQL stats into a minimal barcode-shaped dict
+        # so the rest of the frontend (which reads from barcode) picks them up.
+        if sql_result:
+            # Detect minute-only timestamp precision — cycle times will be
+            # multiples of 60s and are meaningless; keep barcode values instead.
+            minute_only = _sql_is_minute_precision(sql_result)
+
+            if barcode_result:
+                barcode_result['completedUnits']       = sql_result['completedUnits']
+                barcode_result['completionTimestamps'] = sql_result['completionTimestamps']
+                barcode_result['sqlUph']               = sql_result['overallUph']
+                barcode_result['dataSource']           = 'sql'
+                if not minute_only:
+                    barcode_result['cycleTimeMedian']  = sql_result['cycleTimeMedian']
+                    barcode_result['cycleTimeMean']    = sql_result['cycleTimeMean']
+                    barcode_result['cycleTimeMax']     = sql_result['cycleTimeMax']
+            else:
+                # No barcode — build a minimal barcode-shaped result from SQL
+                barcode_result = {
+                    'completedUnits':       sql_result['completedUnits'],
+                    'completionTimestamps': sql_result['completionTimestamps'],
+                    'hourlyActivity':       sql_result['hourlyActivity'],
+                    'firstEvent':           sql_result['firstEvent'],
+                    'lastEvent':            sql_result['lastEvent'],
+                    'cycleTimeMedian':      None if minute_only else sql_result['cycleTimeMedian'],
+                    'cycleTimeMean':        None if minute_only else sql_result['cycleTimeMean'],
+                    'cycleTimeMax':         None if minute_only else sql_result['cycleTimeMax'],
+                    'sqlUph':               sql_result['overallUph'],
+                    'totalEvents':          sql_result['completedUnits'],
+                    'scanEvents':           0,
+                    'events':               [],
+                    'snDuplicates':         0,
+                    'dataSource':           'sql',
+                }
+        elif barcode_result:
+            barcode_result['dataSource'] = 'barcode'
 
         station_analyses.append({
             'station': station_info,
             'barcode': barcode_result,
             'errors': error_result,
-            'sql': sql_result,
+            'sql': {k: v for k, v in sql_result.items() if k != 'units'} if sql_result else None,
         })
     
     # Run cross-station analysis
@@ -794,6 +1005,7 @@ def reset_analytics():
     store["analysis_results"] = None
     store["analysis_cached_at"] = None
     store["start_time_filter"] = None
+    store["exclude_windows"] = []
     return {"status": "reset"}
 
 
