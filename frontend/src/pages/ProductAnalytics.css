@@ -247,8 +247,8 @@
 }
 
 .file-slot .file-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3990,8 +3990,8 @@
 /* Grid */
 .analyses-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 0.875rem;
 }
 
 /* ── Card ── */
@@ -4177,8 +4177,9 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
-  width: 88px;
+  width: 108px;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .station-row-track {
