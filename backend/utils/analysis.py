@@ -1,5 +1,5 @@
 """
-Analysis module — finds data issues in MMI logs + SQL exports and generates
+Analysis module — finds data issues in MMI logs + SQL Files and generates
 change proposals for review in the Data Cleanup UI.
 
 Issue types

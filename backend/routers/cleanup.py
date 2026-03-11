@@ -3,7 +3,7 @@ Cleanup Router - Handles file uploads, analysis, and change management.
 
 Endpoints:
 - POST /cleanup/upload/mmi - Upload MMI log file
-- POST /cleanup/upload/sql - Upload SQL export (Excel) - main data table
+- POST /cleanup/upload/sql - Upload SQL File (Excel) - main data table
 - POST /cleanup/upload/sql-errors - Upload SQL error table (Excel) - for OEE analysis
 - POST /cleanup/analyze - Run analysis and generate change proposals
 - GET /cleanup/changes - Get all proposed changes
@@ -82,7 +82,7 @@ async def upload_mmi(file: UploadFile = File(...)):
 
 @router.post("/upload/sql")
 async def upload_sql(file: UploadFile = File(...)):
-    """Upload and parse SQL export Excel file"""
+    """Upload and parse SQL File Excel file"""
     content = await file.read()
     
     store["sql_raw"] = content

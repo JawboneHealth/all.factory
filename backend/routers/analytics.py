@@ -742,7 +742,7 @@ async def run_analysis(start_time: Optional[str] = None):
                 err['station'] = STATIONS[station_code]['name']
                 all_errors.append(err)
 
-        # Parse SQL export if available
+        # Parse SQL File if available
         sql_result = None
         if station_data.get('sql_content'):
             sql_result = parse_sql_export(station_data['sql_content'])

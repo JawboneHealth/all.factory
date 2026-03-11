@@ -61,7 +61,7 @@ def build_system_prompt(ctx: ScreenContext) -> str:
 
 ## App Overview
 all.factory has two tools accessible from the navbar:
-- **Data Cleanup** (`/data-cleanup`): Upload Battery station MMI barcode log + SQL export to detect and fix 6 types of data quality issues. Review each proposed fix, approve or reject, then export cleaned files.
+- **Data Cleanup** (`/data-cleanup`): Upload Battery station MMI barcode log + SQL File to detect and fix 6 types of data quality issues. Review each proposed fix, approve or reject, then export cleaned files.
 - **Production Analytics** (`/analytics`): Upload log files for up to 6 assembly line stations to analyze cycle times, errors, throughput, cross-station patterns, and unit-by-unit production data across 5 views. Analyses are saved automatically and can be revisited.
 
 ---
@@ -80,7 +80,7 @@ all.factory has two tools accessible from the navbar:
 Each station accepts up to 3 optional files:
 - **Barcode Log** (.log/.txt): MMI barcode log — primary source for scan events, unit completions, cycle times, serial numbers. Format: `[HH:MM:SS AM/PM] event_data`
 - **Error Log** (.log/.txt): Error event log — source for error codes, durations, downtime. Format varies: OCCURED/CLEARED for BS/BA; "An ERROR"/"ERROR RESET" for TR/TO/LA/FV (FVT uses 24h time).
-- **SQL Export** (.csv/.xlsx): Database export — authoritative unit count (row count = completed units written to DB).
+- **SQL File** (.csv/.xlsx): Database export — authoritative unit count (row count = completed units written to DB).
 
 At least one file from one station is required. All files optional — partial data gives partial results.
 
@@ -147,11 +147,11 @@ Each saved analysis card shows:
 ## DATA CLEANUP — Full Reference
 
 ### What It Does
-Compares a Battery station MMI barcode log against its SQL export to detect 6 types of data quality issues. Generates proposed changes. User approves/rejects each, then exports corrected files.
+Compares a Battery station MMI barcode log against its SQL File to detect 6 types of data quality issues. Generates proposed changes. User approves/rejects each, then exports corrected files.
 
 ### Required Files
 - **Battery MMI Barcode Log** (.log/.txt): Raw barcode log from the Battery assembly station.
-- **Battery SQL Export** (.xlsx/.xls/.csv): Database export for the Battery station. Key columns: `ID, DATE, LOTID, PSA_TAPE_PIC, POWER_BOARD_SN, POWER_BOARD_SN_PIC, POWER_BOARD_PRS, POWER_BOARD_PRS_PIC, POWER_BOARD_PSA_PIC, BATTERY_SN, BATTERY_SN_PIC, BATTERY_PRS, BATTERY_PRS_PIC, BATTERY_PSA_PIC, TEMP, HUMIDITY`.
+- **Battery SQL File** (.xlsx/.xls/.csv): Database export for the Battery station. Key columns: `ID, DATE, LOTID, PSA_TAPE_PIC, POWER_BOARD_SN, POWER_BOARD_SN_PIC, POWER_BOARD_PRS, POWER_BOARD_PRS_PIC, POWER_BOARD_PSA_PIC, BATTERY_SN, BATTERY_SN_PIC, BATTERY_PRS, BATTERY_PRS_PIC, BATTERY_PSA_PIC, TEMP, HUMIDITY`.
 
 ### MMI Log Event Types
 Each line: `[HH:MM:SS AM/PM] event_data`. Classified as:
@@ -209,11 +209,11 @@ Fix: Keep first INSERT in MMI, remove subsequent ones. No SQL change.
         prompt += "## Current Screen\n"
         prompt += "User is on the **Data Cleanup page**.\n"
         if not ctx.mmi_uploaded and not ctx.sql_uploaded:
-            prompt += "Status: Nothing uploaded. They need both an MMI barcode log (.log/.txt) and SQL export (.xlsx/.csv) to begin.\n"
+            prompt += "Status: Nothing uploaded. They need both an MMI barcode log (.log/.txt) and SQL File (.xlsx/.csv) to begin.\n"
         elif ctx.mmi_uploaded and not ctx.sql_uploaded:
-            prompt += "Status: MMI log uploaded, waiting for SQL export.\n"
+            prompt += "Status: MMI log uploaded, waiting for SQL File.\n"
         elif not ctx.mmi_uploaded and ctx.sql_uploaded:
-            prompt += "Status: SQL export uploaded, waiting for MMI log.\n"
+            prompt += "Status: SQL File uploaded, waiting for MMI log.\n"
         elif ctx.mmi_uploaded and ctx.sql_uploaded and not ctx.analyzed:
             prompt += "Status: Both files uploaded. Ready to click Analyze Files.\n"
         elif ctx.analyzed:

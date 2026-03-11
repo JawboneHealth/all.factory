@@ -44,7 +44,7 @@ def _detect_and_read(content: bytes) -> pd.DataFrame:
 
 
 def parse_sql_export(content: bytes) -> list[dict]:
-    """Parse SQL export from Excel or CSV file into list of row dicts"""
+    """Parse SQL File from Excel or CSV file into list of row dicts"""
     df = _detect_and_read(content)
     # Convert NaN to None for cleaner JSON
     df = df.where(pd.notnull(df), None)
@@ -52,7 +52,7 @@ def parse_sql_export(content: bytes) -> list[dict]:
 
 
 def parse_sql_export_df(content: bytes) -> pd.DataFrame:
-    """Parse SQL export and return DataFrame"""
+    """Parse SQL File and return DataFrame"""
     df = _detect_and_read(content)
     return df
 
