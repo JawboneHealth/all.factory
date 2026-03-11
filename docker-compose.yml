@@ -26,6 +26,7 @@ services:
       - "8003:8000"
     environment:
       - DATABASE_URL=postgresql+psycopg2://postgres:password@db:5432/allfactory
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
     depends_on:
       db:
         condition: service_healthy
