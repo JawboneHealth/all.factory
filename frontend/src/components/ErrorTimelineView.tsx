@@ -575,34 +575,6 @@ export function ErrorTimelineView({ analyses }: Props) {
         </div>
       </div>
 
-      {/* Station Summary */}
-      <div className="station-summary">
-        {activeStations.map(s => {
-          const stationErrors = filteredErrors.filter(e => e.stationCode === s.code);
-          const isSelected = selectedStation === s.code;
-          return (
-            <div
-              key={s.code}
-              className={`summary-item ${isSelected ? 'selected' : ''}`}
-              style={{ '--item-color': s.color } as React.CSSProperties}
-              onClick={() => setSelectedStation(isSelected ? 'all' : s.code)}
-            >
-              <span className="item-icon">{s.icon}</span>
-              <span className="item-name">{s.name}</span>
-              <span className="item-count">{stationErrors.length}</span>
-              <div className="item-bar">
-                <div
-                  className="item-fill"
-                  style={{
-                    width: `${(stationErrors.length / Math.max(...activeStations.map(x => x.errorCount), 1)) * 100}%`
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Help hint */}
       <div className="timeline-hint">
         <span><MousePointer size={14} /> Drag to pan</span>
