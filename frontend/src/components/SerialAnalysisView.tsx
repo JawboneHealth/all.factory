@@ -26,7 +26,7 @@ const SERIAL_METRIC_INFO: Record<string, MetricInfo> = {
   avgNormalCycle: {
     title: 'Avg Normal Cycle',
     formula: 'mean(gaps where gap < 30s)',
-    note: 'Average of gaps classified as normal. Excludes buffer and stoppage gaps to show true machine speed.',
+    note: 'Average of gaps classified as normal. Excludes slow and stoppage gaps to show true machine speed.',
   },
   medianGap: {
     title: 'Median Gap',
@@ -154,16 +154,23 @@ export function SerialAnalysisView({ analyses }: Props) {
     };
   }, [currentAnalysis]);
 
-  const getGapColor = (_gap: number, isStoppage: boolean, isBuffer: boolean) => {
-    if (isStoppage) return '#ef4444';
-    if (isBuffer) return '#f59e0b';
-    return '#10b981';
+  const normalCycle = currentAnalysis?.stats?.avgNormalCycleTime || 30;
+
+  // Continuous spectrum: green if at/below normal, yellow→orange→red as lateness grows.
+  // Anchors: 1× normal = green, 2× = yellow, 5× = orange, 10×+ = red
+  const getGapColor = (gap: number, _isStoppage: boolean, _isBuffer: boolean) => {
+    const ratio = gap / normalCycle;
+    if (ratio <= 1) return '#10b981'; // green
+    // Interpolate hue: 60° (yellow) at 2×, 30° (orange) at 5×, 0° (red) at 10×+
+    const t = Math.min((ratio - 1) / 9, 1); // 0 at 1×, 1 at 10×
+    const hue = Math.round(60 * (1 - t));
+    const sat = 90;
+    const lit = Math.round(50 - t * 8); // slightly darker red
+    return `hsl(${hue}, ${sat}%, ${lit}%)`;
   };
 
-  const getGapStatus = (_gap: number, isStoppage: boolean, isBuffer: boolean) => {
-    if (isStoppage) return 'Stoppage';
-    if (isBuffer) return 'Buffer';
-    return 'Normal';
+  const getGapStatus = (gap: number, _isStoppage: boolean, _isBuffer: boolean) => {
+    return gap <= normalCycle ? 'Normal' : 'Late';
   };
 
   const formatDuration = (seconds: number) => {
@@ -306,15 +313,11 @@ export function SerialAnalysisView({ analyses }: Props) {
                 <div className="chart-legend">
                   <span className="legend-item">
                     <span className="legend-color normal"></span>
-                    Normal (&lt;30s)
+                    Normal (≤{normalCycle}s)
                   </span>
                   <span className="legend-item">
-                    <span className="legend-color buffer"></span>
-                    Buffer (30-60s)
-                  </span>
-                  <span className="legend-item">
-                    <span className="legend-color stoppage"></span>
-                    Stoppage (&gt;60s)
+                    <span className="legend-color late-spectrum"></span>
+                    Late (yellow → orange → red)
                   </span>
                 </div>
               </div>
@@ -537,7 +540,7 @@ export function SerialAnalysisView({ analyses }: Props) {
                       </td>
                       <td className="sn-col"><code>{unit.sn || '—'}</code></td>
                       <td>
-                        <span className={`status ${unit.isStoppage ? 'stoppage' : unit.isBuffer ? 'buffer' : 'normal'}`}>
+                        <span className={`status ${unit.gap <= normalCycle ? 'normal' : 'late'}`}>
                           {getGapStatus(unit.gap, unit.isStoppage, unit.isBuffer)}
                         </span>
                       </td>

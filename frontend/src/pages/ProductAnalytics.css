@@ -2668,8 +2668,8 @@
 }
 
 .chart-legend .legend-color.normal { background: var(--accent-success); }
-.chart-legend .legend-color.buffer { background: var(--accent-warning); }
-.chart-legend .legend-color.stoppage { background: var(--accent-danger); }
+.chart-legend .legend-color.late-spectrum { background: linear-gradient(to right, #f59e0b, #f97316, #ef4444); width: 40px; }
+
 
 /* Gap Chart */
 .gap-chart {
@@ -2938,8 +2938,8 @@
 }
 
 .status.normal { background: var(--accent-success-dim); color: var(--accent-success); }
-.status.buffer { background: var(--accent-warning-dim); color: var(--accent-warning); }
-.status.stoppage { background: var(--accent-danger-dim); color: var(--accent-danger); }
+.status.late { background: #fef3c7; color: #92400e; }
+
 
 /* Production Runs Container */
 .runs-container {
@@ -4239,13 +4239,112 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.1s;
+  transition: box-shadow 0.15s, transform 0.1s, border-color 0.2s;
+  position: relative;
 }
 
 .analysis-card:hover {
   border-color: var(--accent-primary);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.09);
   transform: translateY(-2px);
+}
+
+.analysis-card.reanalyzing {
+  border-color: var(--accent-primary);
+  transform: none;
+}
+
+.analysis-card.reanalyzing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(99,102,241,0.06) 40%,
+    rgba(99,102,241,0.13) 50%,
+    rgba(99,102,241,0.06) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: card-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.analysis-card.reanalyzed {
+  border-color: var(--accent-success);
+}
+
+@keyframes card-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.analysis-card.reanalyzing .station-row-fill {
+  animation: bar-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes bar-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 1; }
+}
+
+/* Status badge */
+.card-reanalyze-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--accent-primary);
+  background: white;
+  color: var(--accent-primary);
+  pointer-events: none;
+}
+
+.card-reanalyze-badge.success {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+}
+
+.card-reanalyze-badge .spin {
+  animation: spin 0.9s linear infinite;
+}
+
+/* Progress bar */
+.card-reanalyze-bar {
+  height: 3px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.card-reanalyze-fill {
+  height: 100%;
+  width: 0;
+}
+
+.card-reanalyze-fill.active {
+  background: linear-gradient(90deg, var(--accent-primary), #8b5cf6);
+  animation: bar-sweep 1.4s ease-in-out infinite;
+}
+
+.card-reanalyze-fill.success {
+  background: var(--accent-success);
+  width: 100%;
+  animation: none;
+  transition: width 0.3s ease;
+}
+
+@keyframes bar-sweep {
+  0%   { transform: translateX(-100%) scaleX(0.4); width: 100%; }
+  50%  { transform: translateX(60%) scaleX(0.6); }
+  100% { transform: translateX(200%) scaleX(0.4); }
 }
 
 /* Header band */
@@ -4358,6 +4457,26 @@
 .icon-btn.danger:hover   { background: rgba(220,38,38,0.08); color: #dc2626; }
 .icon-btn.confirm:hover  { background: rgba(5,150,105,0.08); color: #059669; }
 .icon-btn.cancel:hover   { background: rgba(220,38,38,0.08); color: #dc2626; }
+.icon-btn.reanalyze:hover { background: rgba(99,102,241,0.08); color: var(--accent-primary); }
+.icon-btn.reanalyze.success { color: var(--accent-success); }
+.icon-btn.reanalyze.spinning svg { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+
+.reanalyze-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(220,38,38,0.06);
+  border: 1px solid rgba(220,38,38,0.2);
+  border-radius: var(--radius-lg);
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
 
 .rename-row {
   display: flex;

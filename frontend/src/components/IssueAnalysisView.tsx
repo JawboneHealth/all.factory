@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Search, Waves, RefreshCw, Lightbulb, AlertCircle, AlertTriangle, 
-  CheckCircle, Info, ChevronDown, Clock, Sparkles, PartyPopper 
+  CheckCircle, Info, ChevronDown, Clock, Sparkles, PartyPopper, ArrowRight
 } from 'lucide-react';
 
 interface CrossStationAnalysis {
@@ -13,9 +13,10 @@ interface CrossStationAnalysis {
 
 interface Props {
   analysis: CrossStationAnalysis | null;
+  onTabChange?: (tab: 'cascades' | 'recurring') => void;
 }
 
-export function IssueAnalysisView({ analysis }: Props) {
+export function IssueAnalysisView({ analysis, onTabChange }: Props) {
   const [activeTab, setActiveTab] = useState<'insights' | 'cascades' | 'recurring'>('insights');
   const [expandedCascade, setExpandedCascade] = useState<string | null>(null);
 
@@ -115,16 +116,68 @@ export function IssueAnalysisView({ analysis }: Props) {
               </div>
             ) : (
               <div className="insights-list">
-                {insights.map((insight, i) => (
-                  <div key={i} className={`insight-item ${insight.level}`}>
-                    <span className="insight-icon">{getInsightIcon(insight.level)}</span>
-                    <div 
-                      className="insight-text"
-                      dangerouslySetInnerHTML={{ __html: insight.text }}
-                    />
-                    <span className={`insight-badge ${insight.level}`}>{insight.level}</span>
-                  </div>
-                ))}
+                {insights.map((insight, i) => {
+                  // Try to find related cascades or recurring patterns
+                  const relatedCascades = cascades.filter(c =>
+                    insight.text.includes(c.stations?.[0]) || insight.text.includes(c.startTime)
+                  );
+                  const relatedRecurring = recurring.filter(r =>
+                    insight.text.includes(r.code) || insight.text.includes(r.station)
+                  );
+
+                  return (
+                    <div key={i} className={`insight-item ${insight.level}`}>
+                      <span className="insight-icon">{getInsightIcon(insight.level)}</span>
+                      <div className="insight-body">
+                        <div
+                          className="insight-text"
+                          dangerouslySetInnerHTML={{ __html: insight.text }}
+                        />
+                        <div className="insight-refs">
+                          {relatedCascades.length > 0 && (
+                            <button
+                              className="insight-link"
+                              onClick={() => { setActiveTab('cascades'); onTabChange?.('cascades'); }}
+                            >
+                              <Waves size={12} />
+                              {relatedCascades.length === 1
+                                ? `Cascade at ${relatedCascades[0].startTime}`
+                                : `${relatedCascades.length} cascades`}
+                              <ArrowRight size={11} />
+                            </button>
+                          )}
+                          {relatedRecurring.length > 0 && (
+                            <button
+                              className="insight-link"
+                              onClick={() => { setActiveTab('recurring'); onTabChange?.('recurring'); }}
+                            >
+                              <RefreshCw size={12} />
+                              {relatedRecurring.map(r => r.code).join(', ')}
+                              <ArrowRight size={11} />
+                            </button>
+                          )}
+                          {relatedCascades.length === 0 && relatedRecurring.length === 0 && cascades.length > 0 && insight.level !== 'success' && (
+                            <button
+                              className="insight-link secondary"
+                              onClick={() => { setActiveTab('cascades'); onTabChange?.('cascades'); }}
+                            >
+                              <Waves size={12} /> View cascades <ArrowRight size={11} />
+                            </button>
+                          )}
+                          {relatedCascades.length === 0 && relatedRecurring.length === 0 && recurring.length > 0 && insight.level !== 'success' && (
+                            <button
+                              className="insight-link secondary"
+                              onClick={() => { setActiveTab('recurring'); onTabChange?.('recurring'); }}
+                            >
+                              <RefreshCw size={12} /> View recurring <ArrowRight size={11} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`insight-badge ${insight.level}`}>{insight.level}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
