@@ -128,22 +128,27 @@ export function SerialAnalysisView({ analyses }: Props) {
     
     if (allGaps.length === 0) return null;
     
-    // Scale Y axis to the 95th percentile to avoid stoppages crushing normal bars,
-    // but track actual max so tooltip is always accurate
     const sorted = [...allGaps].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1];
-    const niceMax = Math.ceil(p95 / 10) * 10;
+    const actualMax = sorted[sorted.length - 1];
     
-    // Generate Y axis ticks
+    // Use log scale so bars accurately reflect relative durations.
+    // A 300s gap and a 30s gap should look visually different.
+    const logMax = Math.log10(actualMax + 1);
+    const toLogPct = (gap: number) =>
+      gap <= 0 ? 0 : Math.min((Math.log10(gap + 1) / logMax) * 100, 100);
+    
+    // Generate Y axis ticks at nice round values
     const yTicks: number[] = [];
-    const tickCount = 5;
-    for (let i = 0; i <= tickCount; i++) {
-      yTicks.push(Math.round((niceMax / tickCount) * i));
-    }
+    const candidates = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1800, 3600];
+    const filtered = candidates.filter(v => v <= actualMax * 1.1);
+    if (filtered.length < 3) filtered.push(...candidates.slice(0, 3));
+    yTicks.push(...filtered);
     
     return {
       units: units.slice(0, 200),
-      maxGap: niceMax,
+      maxGap: actualMax,
+      logMax,
+      toLogPct,
       yTicks: yTicks.reverse(),
       totalUnits: units.length,
     };
@@ -318,8 +323,8 @@ export function SerialAnalysisView({ analyses }: Props) {
                 {/* Y Axis */}
                 <div className="y-axis">
                   {chartData.yTicks.map((tick, i) => (
-                    <div key={i} className="y-tick">
-                      <span className="y-label">{tick}s</span>
+                    <div key={i} className="y-tick" style={{ bottom: `${chartData.toLogPct(tick)}%` }}>
+                      <span className="y-label">{tick >= 60 ? `${tick/60}m` : `${tick}s`}</span>
                       <div className="y-line"></div>
                     </div>
                   ))}
@@ -339,8 +344,7 @@ export function SerialAnalysisView({ analyses }: Props) {
                     >
                     {chartData.units.slice(1).map((unit, idx) => {
                       const color = getGapColor(unit.gap, unit.isStoppage, unit.isBuffer);
-                      const isCapped = unit.gap > chartData.maxGap;
-                      const heightPct = Math.min((unit.gap / chartData.maxGap) * 100, 100);
+                      const heightPct = chartData.toLogPct(unit.gap);
                       const isHovered = hoveredUnit === idx;
                       
                       return (
@@ -364,9 +368,6 @@ export function SerialAnalysisView({ analyses }: Props) {
                             style={{
                               height: `${heightPct}%`,
                               backgroundColor: color,
-                              backgroundImage: isCapped
-                                ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px)'
-                                : undefined,
                             }}
                           />
                         </div>
