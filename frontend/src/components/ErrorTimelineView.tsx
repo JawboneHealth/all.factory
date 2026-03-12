@@ -40,7 +40,9 @@ const COLORS = {
 export function ErrorTimelineView({ analyses }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
+  const swimlanesRef = useRef<number>(0);
 
   const [viewState, setViewState] = useState({
     offsetX: 0,
@@ -138,13 +140,17 @@ export function ErrorTimelineView({ analyses }: Props) {
   // Sync vertical scroll for labels
   const syncScroll = useCallback(() => {
     if (labelsRef.current) {
-      labelsRef.current.style.transform = `translateY(${viewState.offsetY}px)`;
+      labelsRef.current.scrollTop = -viewState.offsetY;
     }
   }, [viewState.offsetY]);
 
   useEffect(() => {
     syncScroll();
   }, [syncScroll]);
+
+  useEffect(() => {
+    swimlanesRef.current = swimlanes.length;
+  }, [swimlanes.length]);
 
   // Draw canvas
   const draw = useCallback(() => {
@@ -391,23 +397,27 @@ export function ErrorTimelineView({ analyses }: Props) {
         };
       });
     } else if (e.shiftKey) {
-      // Vertical scroll
-      setViewState(prev => ({
-        ...prev,
-        offsetY: prev.offsetY - e.deltaY,
-      }));
-    } else {
       // Horizontal pan
       setViewState(prev => ({
         ...prev,
         offsetX: prev.offsetX - (e.deltaX || e.deltaY),
       }));
+    } else {
+      // Vertical scroll
+      setViewState(prev => {
+        const canvas = canvasRef.current;
+        const totalContentHeight = swimlanesRef.current * (LANE_HEIGHT + LANE_MARGIN) + TIME_AXIS_HEIGHT;
+        const visibleHeight = canvas?.clientHeight ?? 600;
+        const minOffsetY = Math.min(0, visibleHeight - totalContentHeight);
+        const newOffsetY = Math.max(minOffsetY, Math.min(0, prev.offsetY - e.deltaY));
+        return { ...prev, offsetY: newOffsetY };
+      });
     }
   }, []);
 
   // Attach wheel event listener with { passive: false } to allow preventDefault
   useEffect(() => {
-    const container = containerRef.current;
+    const container = wrapperRef.current;
     if (!container) return;
 
     container.addEventListener('wheel', handleWheel, { passive: false });
@@ -493,11 +503,12 @@ export function ErrorTimelineView({ analyses }: Props) {
       </div>
 
       {/* Timeline Canvas Area */}
-      <div className="timeline-canvas-wrapper">
+      <div className="timeline-canvas-wrapper" ref={wrapperRef}>
         {/* Sticky Labels */}
         <div className="swimlane-labels-container">
           <div className="labels-header">Error Code</div>
           <div className="labels-scroll" ref={labelsRef}>
+            <div style={{ height: swimlanes.length * (LANE_HEIGHT + LANE_MARGIN) }}>
             {swimlanes.map((lane, idx) => (
               <div
                 key={lane.key}
@@ -512,11 +523,12 @@ export function ErrorTimelineView({ analyses }: Props) {
                 </span>
                 <div className="label-info">
                   <span className="label-code">{lane.code}</span>
-                  <span className="label-message">{lane.message?.slice(0, 30)}...</span>
+                  <span className="label-message">{lane.message}</span>
                 </div>
                 <span className="label-count">{lane.count}</span>
               </div>
             ))}
+            </div>
           </div>
         </div>
 
@@ -603,8 +615,8 @@ export function ErrorTimelineView({ analyses }: Props) {
       {/* Help hint */}
       <div className="timeline-hint">
         <span><MousePointer size={14} /> Drag to pan</span>
-        <span><GripHorizontal size={14} /> Scroll horizontal</span>
-        <span><ArrowUpDown size={14} /> Shift+scroll vertical</span>
+        <span><GripHorizontal size={14} /> Shift+scroll horizontal</span>
+        <span><ArrowUpDown size={14} /> Scroll vertical</span>
         <span><Search size={14} /> Pinch/⌘+scroll zoom</span>
         <span><Sparkles size={14} /> Hover for details</span>
       </div>
