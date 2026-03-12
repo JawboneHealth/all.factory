@@ -15,7 +15,7 @@ Analysis Features:
 - Serial Analysis: Unit-by-unit cycle time analysis
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 from collections import defaultdict, Counter

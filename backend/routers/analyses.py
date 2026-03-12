@@ -6,6 +6,7 @@ import uuid
 
 from database import get_db
 from models import Analysis
+from .analytics import run_analysis, store
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
