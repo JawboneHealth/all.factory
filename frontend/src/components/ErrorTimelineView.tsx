@@ -201,15 +201,6 @@ export function ErrorTimelineView({ analyses }: Props) {
         // Skip if off screen
         if (x < -20 || x > width + 20) return;
 
-        // Error glow
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, dotRadius * 2.5);
-        gradient.addColorStop(0, COLORS.errorGlow);
-        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(x, y, dotRadius * 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
         // Main dot with station color
         ctx.fillStyle = lane.stationColor;
         ctx.beginPath();
