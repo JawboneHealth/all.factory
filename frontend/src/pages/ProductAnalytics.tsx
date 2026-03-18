@@ -32,14 +32,13 @@ export function ProductAnalytics() {
   });
   
   const [timeFilter, setTimeFilter] = useState<string>('');
-  const [excludeWindows, setExcludeWindows] = useState<Array<{start: string; end: string}>>([]);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [view, setView] = useState<'home' | 'upload' | 'results'>('home');
   const [loadedAnalysisId, setLoadedAnalysisId] = useState<string | null>(null);
 
   const handleFileUpload = useCallback((stationCode: string, fileType: 'barcode' | 'error' | 'sql', file: File) => {
-    const fileKey  = fileType === 'sql' ? 'sqlExport'     : `${fileType}Log`;
-    const nameKey  = fileType === 'sql' ? 'sqlExportName' : `${fileType}LogName`;
+    const fileKey = fileType === 'sql' ? 'sqlExport'     : `${fileType}Log`;
+    const nameKey = fileType === 'sql' ? 'sqlExportName' : `${fileType}LogName`;
     setState(prev => ({
       ...prev,
       stationFiles: {
@@ -55,14 +54,14 @@ export function ProductAnalytics() {
   }, []);
 
   const handleFileRemove = useCallback((stationCode: string, fileType: 'barcode' | 'error' | 'sql') => {
-    const fileKey  = fileType === 'sql' ? 'sqlExport'     : `${fileType}Log`;
-    const nameKey  = fileType === 'sql' ? 'sqlExportName' : `${fileType}LogName`;
+    const fileKey = fileType === 'sql' ? 'sqlExport'     : `${fileType}Log`;
+    const nameKey = fileType === 'sql' ? 'sqlExportName' : `${fileType}LogName`;
     setState(prev => {
       const stationFiles = { ...prev.stationFiles };
       if (stationFiles[stationCode]) {
         const updated = { ...stationFiles[stationCode] };
-        delete updated[fileKey as keyof StationFiles];
-        delete updated[nameKey as keyof StationFiles];
+        delete updated[fileKey as keyof typeof updated];
+        delete updated[nameKey as keyof typeof updated];
         stationFiles[stationCode] = updated;
       }
       return { ...prev, stationFiles };
@@ -78,21 +77,21 @@ export function ProductAnalytics() {
       const uploadPromises: Promise<Response>[] = [];
       
       for (const [stationCode, files] of Object.entries(state.stationFiles)) {
-        if (files.barcodeLog) {
+        if (files.barcodeLog && files.barcodeLog.size > 0) {
           const formData = new FormData();
           formData.append('file', files.barcodeLog);
           formData.append('station', stationCode);
           formData.append('type', 'barcode');
           uploadPromises.push(fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData }));
         }
-        if (files.errorLog) {
+        if (files.errorLog && files.errorLog.size > 0) {
           const formData = new FormData();
           formData.append('file', files.errorLog);
           formData.append('station', stationCode);
           formData.append('type', 'error');
           uploadPromises.push(fetch(`${API_BASE}/analytics/upload`, { method: 'POST', body: formData }));
         }
-        if (files.sqlExport) {
+        if (files.sqlExport && files.sqlExport.size > 0) {
           const formData = new FormData();
           formData.append('file', files.sqlExport);
           formData.append('station', stationCode);
@@ -105,8 +104,6 @@ export function ProductAnalytics() {
 
       const params = new URLSearchParams();
       if (timeFilter) params.append('start_time', timeFilter);
-      const validWindows = excludeWindows.filter(w => w.start && w.end);
-      if (validWindows.length > 0) params.append('exclude_windows', JSON.stringify(validWindows));
       
       const analysisRes = await fetch(`${API_BASE}/analytics/analyze?${params}`, { method: 'POST' });
       const analysisData = await analysisRes.json();
@@ -121,7 +118,7 @@ export function ProductAnalytics() {
       // Auto-save to database with summary stats
       try {
         const totalUnits = (analysisData.station_analyses || []).reduce(
-          (acc: number, s: any) => Math.max(acc, s.barcode?.completedUnits || 0), 0
+          (acc: number, s: any) => acc + (s.barcode?.completedUnits || 0), 0
         );
         const totalErrors = (analysisData.station_analyses || []).reduce(
           (acc: number, s: any) => acc + (s.errors?.totalEvents || s.errors?.events?.length || 0), 0
@@ -256,44 +253,6 @@ export function ProductAnalytics() {
               />
             </label>
             <span className="hint">Only analyze events after this time</span>
-          </div>
-
-          <div className="exclude-windows-section">
-            <div className="exclude-windows-header">
-              <span className="exclude-windows-label">Exclude Time Windows (optional)</span>
-              <button
-                className="exclude-add-btn"
-                onClick={() => setExcludeWindows(prev => [...prev, { start: '', end: '' }])}
-              >
-                + Add Window
-              </button>
-            </div>
-            {excludeWindows.length === 0 && (
-              <p className="hint">Exclude specific periods from calculations — e.g. lunch breaks, shift changes.</p>
-            )}
-            {excludeWindows.map((w, i) => (
-              <div key={i} className="exclude-window-row">
-                <input
-                  type="text"
-                  placeholder="e.g., 11:00:00 AM"
-                  value={w.start}
-                  onChange={e => setExcludeWindows(prev => prev.map((x, j) => j === i ? { ...x, start: e.target.value } : x))}
-                />
-                <span className="exclude-to">to</span>
-                <input
-                  type="text"
-                  placeholder="e.g., 11:30:00 AM"
-                  value={w.end}
-                  onChange={e => setExcludeWindows(prev => prev.map((x, j) => j === i ? { ...x, end: e.target.value } : x))}
-                />
-                <button
-                  className="exclude-remove-btn"
-                  onClick={() => setExcludeWindows(prev => prev.filter((_, j) => j !== i))}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
           </div>
         </section>
 
