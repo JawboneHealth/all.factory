@@ -61,8 +61,11 @@ class SaveAnalysisRequest(BaseModel):
 @router.post("/")
 def save_analysis(req: SaveAnalysisRequest, db: Session = Depends(get_db)):
     # Extract summary stats from result
-    station_analyses = req.result.get("stationAnalyses", [])
-    total_units  = sum(s.get("barcode", {}).get("completedUnits", 0) for s in station_analyses if s.get("barcode"))
+    station_analyses = req.result.get("station_analyses", [])
+    total_units  = sum(
+        (s.get("sql") or {}).get("rowCount", 0) or (s.get("barcode") or {}).get("completedUnits", 0)
+        for s in station_analyses
+    )
     total_errors = sum(s.get("errors", {}).get("totalErrors", 0) for s in station_analyses if s.get("errors"))
 
     # Auto-generate name if not provided
