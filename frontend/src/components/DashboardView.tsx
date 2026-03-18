@@ -137,7 +137,7 @@ export function DashboardView({ analyses }: Props) {
   // Calculate totals — prefer SQL row count when available
   const totals = useMemo(() => sortedAnalyses.reduce(
     (acc, a) => ({
-      units: acc.units + (a.sql?.rowCount ?? a.barcode?.completedUnits ?? 0),
+      units: acc.units + (a.barcode?.completedUnits ?? 0),
       errors: acc.errors + (a.errors?.totalErrors || 0),
       downtime: acc.downtime + (a.errors?.totalDowntimeMin || 0),
     }),
@@ -305,11 +305,11 @@ export function DashboardView({ analyses }: Props) {
                   {/* Key Metrics Row */}
                   <div className="metrics-row">
                     <div className="metric">
-                      <span className="metric-value">{analysis.barcode.completedUnits}</span>
+                      <span className="metric-value">{analysis.sql?.rowCount ?? analysis.barcode.completedUnits}</span>
                       <span className="metric-label">Units <InfoTooltip metric="units" /></span>
                     </div>
                     <div className="metric">
-                      <span className="metric-value">{analysis.barcode.scanEvents}</span>
+                      <span className="metric-value">{analysis.sql?.rowCount ?? analysis.barcode.scanEvents}</span>
                       <span className="metric-label">Scans <InfoTooltip metric="scans" /></span>
                     </div>
                     <div className={`metric ${(analysis.errors?.totalErrors || 0) > 10 ? 'warning' : ''}`}>
