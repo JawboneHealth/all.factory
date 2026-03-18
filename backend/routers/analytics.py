@@ -92,7 +92,7 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
     """Parse barcode log and extract events and metrics."""
     log_date = extract_log_date(content)
     lines = content.replace('\r\n', '\n').replace('\r', '\n').split('\n')
-    ts_pattern = re.compile(r'^\[(\d{1,2}:\d{2}:\d{2} [AP]M)\](.*)')
+    ts_pattern = re.compile(r'^(?:[A-Z]->[A-Z]:\s*)?\[(\d{1,2}:\d{2}:\d{2} [AP]M)\](.*)')
 
     # For BS: pre-build a set of line indices where 6101 fires,
     # and map each to the motor SN within the next few lines for deduplication.
@@ -186,7 +186,7 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             elif 'insert into' in content_part.lower() or re.match(r'^\d+:', content_part):
                 event_type = 'DB_Record'
                 category = 'Database'
-        elif station_code in ['TR', 'TO', 'LA']:
+        elif station_code in ['TR', 'TO']:
             if '+3,0,' in content_part:
                 event_type = 'SN_Scan'
                 category = 'Scan'
@@ -198,6 +198,19 @@ def parse_barcode_log(content: str, station_code: str, start_filter: Optional[da
             elif 'insert into' in content_part.lower() or re.match(r'^\d+:', content_part):
                 event_type = 'DB_Record'
                 category = 'Database'
+        elif station_code == 'LA':
+            if 'insert into' in content_part.lower():
+                event_type = 'DB_Record'
+                category = 'Database'
+                # Extract TOP_SHELL_SN for deduplication (LA writes 2 inserts per unit)
+                sn_match = re.search(r"'(T[A-Z0-9]{10,})'", content_part)
+                if sn_match:
+                    sn = sn_match.group(1)
+            elif '+3,0,' in content_part or '+1,0,' in content_part:
+                event_type = 'SN_Scan'
+                category = 'Scan'
+                if len(fields) > 2:
+                    sn = fields[2]
         elif station_code == 'FV':
             # FVT barcode log has a leading comma before each data line: ,+1,0,SN,...
             # After splitting on ']', content_part = ",+1,0,T0624..."
@@ -819,6 +832,9 @@ async def upload_file(
     
     content = await file.read()
     content_str = content.decode('utf-8', errors='ignore')
+
+    if not content_str.strip():
+        raise HTTPException(status_code=400, detail=f"Uploaded file for {station}/{type} is empty")
     
     # Initialize station storage if needed
     if station not in store["stations"]:
