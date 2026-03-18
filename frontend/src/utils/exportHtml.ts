@@ -9,6 +9,16 @@ import { type StationAnalysis, type LogEvent, STATIONS } from '../types';
 
 // ── Shared Helpers ──────────────────────────────────────────
 
+const STATION_ORDER = ['BS', 'BA', 'TR', 'TO', 'LA', 'FV'];
+
+function sortByStationOrder<T extends { station?: { code?: string } }>(analyses: T[]): T[] {
+  return [...analyses].sort((a, b) => {
+    const ai = STATION_ORDER.indexOf(a.station?.code || '');
+    const bi = STATION_ORDER.indexOf(b.station?.code || '');
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+}
+
 function esc(s: string | null | undefined): string {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -365,6 +375,7 @@ function buildStationCard(a: StationAnalysis): string {
 // ── Main export function ──
 
 export function generateDashboardHtml(analyses: StationAnalysis[]): string {
+  analyses = sortByStationOrder(analyses);
   const totals = analyses.reduce(
     (acc, a) => ({
       units: acc.units + (a.barcode?.completedUnits || 0),
@@ -377,7 +388,13 @@ export function generateDashboardHtml(analyses: StationAnalysis[]): string {
   const bottleneck = analyses.reduce((worst, a) => {
     const ct = a.barcode?.cycleTimeMedian || 0;
     const worstCt = worst?.barcode?.cycleTimeMedian || 0;
-    return ct > worstCt ? a : worst;
+    if (ct > worstCt) return a;
+    if (ct === worstCt) {
+      const mean = a.barcode?.cycleTimeMean || 0;
+      const worstMean = worst?.barcode?.cycleTimeMean || 0;
+      return mean > worstMean ? a : worst;
+    }
+    return worst;
   }, analyses[0]);
 
   const summaryHtml = `
@@ -589,6 +606,7 @@ const ERR_CSS = `
 `;
 
 export function generateErrorTimelineHtml(analyses: StationAnalysis[]): string {
+  analyses = sortByStationOrder(analyses);
   // ── Collect all errors ──
   const allErrors: any[] = [];
   analyses.forEach(a => {
@@ -2026,8 +2044,7 @@ const SERIAL_CSS = `
 .legend-item { display: flex; align-items: center; gap: 0.375rem; font-size: 0.6875rem; color: var(--muted) }
 .legend-color { width: 10px; height: 10px; border-radius: 2px; display: inline-block }
 .legend-color.normal { background: #10b981 }
-.legend-color.buffer { background: #f59e0b }
-.legend-color.stoppage { background: #ef4444 }
+.legend-color.late-spectrum { background: linear-gradient(to right, #f59e0b, #f97316, #ef4444) }
 
 .gap-chart-svg { width: 100%; border: 1px solid var(--bdr); border-radius: 8px; background: #fafbfc }
 
@@ -2098,10 +2115,8 @@ table.runs-table td, table.units-table td { padding: 0.5rem 0.75rem; border-bott
 .gap-val { font-family: var(--fm); font-weight: 700 }
 .status { font-size: 0.6875rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 4px }
 .status.normal { background: rgba(16,185,129,0.1); color: #059669 }
-.status.buffer { background: rgba(245,158,11,0.1); color: #d97706 }
-.status.stoppage { background: rgba(239,68,68,0.1); color: #dc2626 }
-.stoppage-row { background: rgba(239,68,68,0.02) }
-.buffer-row { background: rgba(245,158,11,0.02) }
+.status.late { background: rgba(245,158,11,0.1); color: #d97706 }
+.late-row { background: rgba(245,158,11,0.02) }
 .table-more { text-align: center; padding: 0.75rem; font-size: 0.75rem; color: var(--dim); border-top: 1px solid var(--bdr) }
 
 /* ─── View sections (toggled by JS) ─── */
@@ -2116,55 +2131,55 @@ function serialFmtDuration(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function gapColor(gap: number, isStoppage: boolean, isBuffer: boolean): string {
-  if (isStoppage) return '#ef4444';
-  if (isBuffer) return '#f59e0b';
-  return '#10b981';
+function gapColor(gap: number, _isStoppage: boolean, _isBuffer: boolean, normalCycle: number = 30): string {
+  const ratio = gap / normalCycle;
+  if (ratio <= 1) return '#10b981';
+  const t = Math.min((ratio - 1) / 9, 1);
+  const hue = Math.round(60 * (1 - t));
+  const lit = Math.round(50 - t * 8);
+  return `hsl(${hue}, 90%, ${lit}%)`;
 }
 
-function gapStatus(isStoppage: boolean, isBuffer: boolean): string {
-  if (isStoppage) return 'Stoppage';
-  if (isBuffer) return 'Buffer';
-  return 'Normal';
+function gapStatus(gap: number, normalCycle: number = 30): string {
+  return gap <= normalCycle ? 'Normal' : 'Late';
 }
 
-function gapStatusClass(isStoppage: boolean, isBuffer: boolean): string {
-  if (isStoppage) return 'stoppage';
-  if (isBuffer) return 'buffer';
-  return 'normal';
+function gapStatusClass(gap: number, normalCycle: number = 30): string {
+  return gap <= normalCycle ? 'normal' : 'late';
 }
 
-function buildGapChartSvg(units: any[], stationCode: string): string {
-  const gaps = units.slice(1).filter((u: any) => u.gap > 0 && u.gap < 300);
+function buildGapChartSvg(units: any[], stationCode: string, normalCycle: number = 30): string {
+  const gaps = units.slice(1).filter((u: any) => u.gap > 0);
   if (gaps.length === 0) return '';
 
-  const maxGap = Math.max(...gaps.map((u: any) => u.gap));
-  const niceMax = Math.ceil(maxGap / 10) * 10 || 10;
-  const displayUnits = units.slice(1, 201); // max 200 bars
+  const allGaps = gaps.map((u: any) => u.gap);
+  const actualMax = Math.max(...allGaps);
+  const logMax = Math.log10(actualMax + 1);
+  const toLogPct = (gap: number) => gap <= 0 ? 0 : Math.min((Math.log10(gap + 1) / logMax) * 100, 100);
 
+  const displayUnits = units.slice(1, 201);
   const W = 1000, H = 250, PAD_L = 50, PAD_R = 10, PAD_T = 10, PAD_B = 20;
   const chartW = W - PAD_L - PAD_R, chartH = H - PAD_T - PAD_B;
   const barW = Math.max(1, Math.min(8, chartW / displayUnits.length - 1));
 
   let svg = '';
 
-  // Y axis grid + labels
-  const yTicks = 5;
-  for (let i = 0; i <= yTicks; i++) {
-    const val = Math.round((niceMax / yTicks) * i);
-    const y = PAD_T + chartH - (i / yTicks) * chartH;
+  // Y axis grid at meaningful time values
+  const candidates = [1, 2, 5, 10, 30, 60, 120, 300, 600];
+  const yTicks = candidates.filter(v => v <= actualMax * 1.1);
+  yTicks.forEach(val => {
+    const y = PAD_T + chartH - (toLogPct(val) / 100) * chartH;
+    const label = val >= 60 ? `${val/60}m` : `${val}s`;
     svg += `<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="#e2e8f0" stroke-width="0.5"/>`;
-    svg += `<text x="${PAD_L - 6}" y="${y + 3}" text-anchor="end" font-size="9" fill="#94a3b8" font-family="monospace">${val}s</text>`;
-  }
+    svg += `<text x="${PAD_L - 6}" y="${y + 3}" text-anchor="end" font-size="9" fill="#94a3b8" font-family="monospace">${label}</text>`;
+  });
 
-  // Bars with data attributes for tooltip
+  // Bars
   displayUnits.forEach((unit: any, idx: number) => {
     const x = PAD_L + (idx / displayUnits.length) * chartW + barW * 0.2;
-    const heightPct = Math.min(unit.gap / niceMax, 1);
-    const barH = heightPct * chartH;
+    const barH = (toLogPct(unit.gap) / 100) * chartH;
     const y = PAD_T + chartH - barH;
-    const color = gapColor(unit.gap, unit.isStoppage, unit.isBuffer);
-
+    const color = gapColor(unit.gap, unit.isStoppage, unit.isBuffer, normalCycle);
     svg += `<rect class="gap-bar" data-stn="${stationCode}" data-idx="${idx}" x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1" fill="${color}" opacity="0.85" style="cursor:pointer">` +
       `<title>Unit #${unit.n}: ${unit.gap}s</title></rect>`;
   });
@@ -2233,15 +2248,15 @@ function buildRunsTable(runs: any[]): string {
     </div>`;
 }
 
-function buildUnitsTable(units: any[]): string {
+function buildUnitsTable(units: any[], normalCycle: number = 30): string {
   if (!units || units.length === 0) return '';
 
   const displayUnits = units.slice(0, 50);
   const rows = displayUnits.map((unit: any) => {
-    const color = gapColor(unit.gap, unit.isStoppage, unit.isBuffer);
-    const statusCls = gapStatusClass(unit.isStoppage, unit.isBuffer);
-    const statusTxt = gapStatus(unit.isStoppage, unit.isBuffer);
-    const rowCls = unit.isStoppage ? 'stoppage-row' : unit.isBuffer ? 'buffer-row' : '';
+    const color = gapColor(unit.gap, unit.isStoppage, unit.isBuffer, normalCycle);
+    const statusCls = gapStatusClass(unit.gap, normalCycle);
+    const statusTxt = gapStatus(unit.gap, normalCycle);
+    const rowCls = unit.gap > normalCycle ? 'late-row' : '';
     return `<tr class="${rowCls}">
       <td class="num-col">${unit.n}</td>
       <td class="time-col">${esc(unit.time)}</td>
@@ -2271,7 +2286,7 @@ export function generateSerialHtml(analyses: any[]): string {
     return wrapPage('Serial Analysis', 'No data', SERIAL_CSS,
       '<div class="serial-analysis-v2" style="padding:4rem;text-align:center;color:var(--dim)">No serial analysis data available</div>');
   }
-
+  analyses = sortByStationOrder(analyses);
   // ── Build station tabs ──
   const tabsHtml = analyses.map((a: any, i: number) => {
     const station = a.station;
@@ -2289,6 +2304,7 @@ export function generateSerialHtml(analyses: any[]): string {
     const stats = a.stats || {};
     const units = a.units || [];
     const runs = a.runs || [];
+    const normalCycle = stats.avgNormalCycleTime || 30;
 
     // Stats row
     const statsHtml = `
@@ -2298,6 +2314,20 @@ export function generateSerialHtml(analyses: any[]): string {
         <div class="stat-data">
           <span class="stat-value">${stats.totalUnits || 0}</span>
           <span class="stat-label">Total Units</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">⚡</span>
+        <div class="stat-data">
+          <span class="stat-value">${stats.overallUph?.toFixed(1) || '—'}</span>
+          <span class="stat-label">Overall UPH</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">⏱</span>
+        <div class="stat-data">
+          <span class="stat-value">${stats.avgNormalCycleTime?.toFixed(1) || '—'}<small>s</small></span>
+          <span class="stat-label">Avg Normal Cycle</span>
         </div>
       </div>
       <div class="stat-card">
@@ -2345,16 +2375,15 @@ export function generateSerialHtml(analyses: any[]): string {
     </div>`;
 
     // Gap chart
-    const gapChartSvg = buildGapChartSvg(units, station?.code || '');
+    const gapChartSvg = buildGapChartSvg(units, station?.code || '', normalCycle);
     const gapChartHtml = gapChartSvg ? `
     <div class="view-section active" data-stn="${station?.code}" data-view-panel="gaps">
       <div class="gap-chart-container">
         <div class="chart-header">
           <h3>Unit-to-Unit Cycle Gaps</h3>
           <div class="chart-legend">
-            <span class="legend-item"><span class="legend-color normal"></span> Normal (&lt;30s)</span>
-            <span class="legend-item"><span class="legend-color buffer"></span> Buffer (30-60s)</span>
-            <span class="legend-item"><span class="legend-color stoppage"></span> Stoppage (&gt;60s)</span>
+            <span class="legend-item"><span class="legend-color normal"></span> Normal (≤${normalCycle}s)</span>
+            <span class="legend-item"><span class="legend-color late-spectrum"></span> Late (yellow → orange → red)</span>
           </div>
         </div>
         ${gapChartSvg}
@@ -2370,7 +2399,7 @@ export function generateSerialHtml(analyses: any[]): string {
     </div>`;
 
     // Units table (always shown)
-    const unitsTableHtml = buildUnitsTable(units);
+    const unitsTableHtml = buildUnitsTable(units, normalCycle);
 
     return `<div class="station-panel ${i === 0 ? 'active' : ''}" data-stn-panel="${station?.code}">
       ${statsHtml}
@@ -2387,8 +2416,8 @@ export function generateSerialHtml(analyses: any[]): string {
     const code = a.station?.code || '';
     tooltipDataMap[code] = (a.units || []).slice(1, 201).map((u: any) => ({
       n: u.n, gap: u.gap, time: u.time, sn: u.sn || null,
-      status: gapStatus(u.isStoppage, u.isBuffer),
-      color: gapColor(u.gap, u.isStoppage, u.isBuffer),
+      status: gapStatus(u.gap, a.stats?.avgNormalCycleTime || 30),
+      color: gapColor(u.gap, u.isStoppage, u.isBuffer, a.stats?.avgNormalCycleTime || 30),
     }));
   });
   const tooltipJson = JSON.stringify(tooltipDataMap).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
